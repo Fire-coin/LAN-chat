@@ -50,6 +50,7 @@ ConnectionSock::ConnectionSock(int cfd) {
 ConnectionSock::ConnectionSock(std::string IPOrHost, std::string port) {
   struct addrinfo  hints;
   struct addrinfo  *result, *rp;
+  int s;
   
   this->port = port;
   this->IPOrHost = IPOrHost;
@@ -60,8 +61,8 @@ ConnectionSock::ConnectionSock(std::string IPOrHost, std::string port) {
   hints.ai_socktype = SOCK_STREAM; 
   hints.ai_flags = 0;
   hints.ai_protocol = 0;
-  
-  if (getaddrinfo(IPOrHost.c_str(), port.c_str(), &hints, &result) < 0)
+  s =  getaddrinfo(IPOrHost.c_str(), port.c_str(), &hints, &result);
+  if (s < 0)
     perror("Error while creating Connection socket");
 
 
@@ -81,7 +82,7 @@ ConnectionSock::ConnectionSock(std::string IPOrHost, std::string port) {
   if (rp == NULL)
     fprintf(stderr, "Could not connect\n");
 }
-
+// TODO make the display of errors more consistent
 int ConnectionSock::send(std::string msg) {
  return ::send(clientfd, msg.c_str(), msg.size(), 0);
 }

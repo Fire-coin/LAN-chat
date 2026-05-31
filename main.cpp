@@ -1,12 +1,4 @@
 #include <iostream>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/types.h> 
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-
 #include "socket.hpp"
 
 void error(const char* msg) {
@@ -16,7 +8,6 @@ void error(const char* msg) {
 
 
 int main() {
-
   std::cout << "Start of the Test\n";
   
   std::cout << "Select to be server(0) or client(1)\n";
@@ -25,102 +16,65 @@ int main() {
   if (choice != 0 && choice != 1)
     return 0;
 
-  int portNum;
-  char buffer[256];
-  portNum = 555555;
+  int portNum = 55555;
   int n; // Number of bytes written / read
   
 
   if (choice == 0) {
-    int sfd, cfd; // File descriptors of server and client sockets and port number
-    struct sockaddr_in serv_addr, cli_addr;
+    MonitorSock monSock = MonitorSock();
     
-    portNum = 55555; // Custom port number, hopefully not occupied
+    if (monSock.bind(portNum))
+      error("Error while monitoring socket");
 
-    sfd = socket(AF_INET, SOCK_STREAM, 0); // Creating a tcp socket
+    monSock.listen();
+
+    ConnectionSock conSock = monSock.accept();
     
-    if (sfd < 0)
-      error("Error opening socket");
-    
-    memset(&serv_addr, 0, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(portNum);
-    serv_addr.sin_addr.s_addr = INADDR_ANY; 
+    if (!conSock.exists())
+      error("Error while creating connection socket");
 
-    if (bind(sfd, (struct sockaddr* ) &serv_addr, sizeof(serv_addr)) < 0)
-      error("Error binding socket");
+    std::string msg;
+    std::getline(std::cin, msg); // Clear the buffer
+    while (msg != "exit") {
+      std::cout << "Enter message to send to other device: ";
+      std::getline(std::cin, msg);
+      n = conSock.send(msg);
+      if (n < 0)
+        perror("Error sending message to socket");
+        
+      n = conSock.recieve(msg);
+      std::cout << "Recieved message: " << msg << std::endl;
+    }
 
-    listen(sfd, 5);
-    
-    socklen_t cliLen = sizeof(cli_addr);
-
-    cfd = accept(sfd, (struct sockaddr*) &cli_addr, &cliLen);
-    
-    if (cfd < 0)
-      error("Error accepting socket");
-
-    memset(&buffer, 0, sizeof(buffer));
-    n = recv(cfd, buffer, sizeof(buffer), 0);
-    if (n < 0)
-      error("Error reading from socket");
-    printf("Recieved message %s\n", buffer);
-    n = send(cfd, "Message recieved", 16, 0);
-    if (n < 0)
-      error("Error writing to socket");
-    close(cfd);
-    close(sfd);
+    conSock.close();
+    monSock.close();
 
   } else {
-    int sfd, s;
+    ConnectionSock conSock = ConnectionSock("localhost", "55555");
 
-    struct addrinfo  hints;
-    struct addrinfo  *result, *rp;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;    
-    hints.ai_socktype = SOCK_STREAM; 
-    hints.ai_flags = 0;
-    hints.ai_protocol = 0;
-    
-    // FIrst parameter can be either ip adress or hostname e.g: localhost
-    s = getaddrinfo("localhost", "55555", &hints, &result);
-
-    for (rp = result; rp != NULL; rp = rp->ai_next) {
-     sfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-     if (sfd == -1)
-       continue;
-
-     if (connect(sfd, rp->ai_addr, rp->ai_addrlen) != -1)
-       break;                  /* Success */
-
-     close(sfd);
-    }
-
-    freeaddrinfo(result);
-
-    if (rp == NULL) {               /* No address succeeded */
-      fprintf(stderr, "Could not connect\n");
-      exit(EXIT_FAILURE);
-    }
+    if (!conSock.exists())
+      error("Error connecting to Socket");
     
     std::string msg;
-    std::cout << "Enter message: ";
-    std::getline(std::cin, msg); // To free up the stream because of the first input of integer
     std::getline(std::cin, msg);
 
-    std::cout << "Given message: " << msg << std::endl;
+    while (msg != "exit") {
+      n = conSock.recieve(msg);
+      if (n < 0)
+        std::cout << "No recieved message\n";
+      else
+        std::cout << "Recieved message: " << msg << std::endl;
 
-    n = send(sfd, msg.c_str(), msg.size(), 0);
-    if (n < 0)
-      error("Error sending to socket");
-    
-    memset(buffer, 0, sizeof(buffer));
+      std::cout << "Enter message to transmit: ";
+      std::getline(std::cin, msg);
 
-    n = recv(sfd, buffer, sizeof(buffer), 0);
-    
-    if (n < 0)
-      error("Error recieving from socket");
+      n = conSock.send(msg);
+      if (n < 0)
+        perror("Error sending to socket");
+    }
 
-    close(sfd);
+    conSock.close();
+
   }
   return 0;
 }
