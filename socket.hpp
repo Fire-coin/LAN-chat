@@ -3,14 +3,20 @@
 
 #include <sys/socket.h>
 #include <netinet/in.h>
-
+#include <string>
 
 class ConnectionSock {
   int clientfd;
+  std::string port, IPOrHost;
 
   public:
   ConnectionSock(int cfd);
+  ConnectionSock(std::string IPOrHost, std::string port); 
 
+  int send(std::string msg);
+  int recieve(std::string& msg);
+  bool exists();
+  void close();
 };
 
 

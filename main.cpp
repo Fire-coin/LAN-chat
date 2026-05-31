@@ -81,7 +81,7 @@ int main() {
     hints.ai_flags = 0;
     hints.ai_protocol = 0;
     
-    // FIrst parameter can be either ip adress or service for e.g: localhost
+    // FIrst parameter can be either ip adress or hostname e.g: localhost
     s = getaddrinfo("localhost", "55555", &hints, &result);
 
     for (rp = result; rp != NULL; rp = rp->ai_next) {
