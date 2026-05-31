@@ -7,6 +7,8 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
+#include "socket.hpp"
+
 void error(const char* msg) {
   perror(msg);
   exit(1);
