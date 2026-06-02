@@ -43,6 +43,8 @@ int main() {
         perror("Error sending message to socket");
         
       n = conSock.recieve(msg);
+      if (n == 1)
+        continue;
       std::cout << "Recieved message: " << msg << std::endl;
     }
 
