@@ -4,7 +4,7 @@
 #include <stdlib.h> // perror
 #include <sys/types.h> 
 #include <netdb.h>
-
+#include <iostream>
 MonitorSock::MonitorSock() {
   // IPv4 TCP socket
   this->serverfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -84,22 +84,46 @@ ConnectionSock::ConnectionSock(std::string IPOrHost, std::string port) {
 }
 // TODO make the display of errors more consistent
 int ConnectionSock::send(std::string msg) {
- return ::send(clientfd, msg.c_str(), msg.size(), 0);
+  std::string message;
+  size_t msgSize = msg.size();
+  std::cout << msgSize << std::endl;
+  message.append(reinterpret_cast<const char*>(&msgSize), sizeof(size_t)); 
+  message.append(128, '\0'); // No filename for text message
+  message.append(msg);
+  
+  return ::send(clientfd, message.c_str(), message.size(), 0);
 }
 
 // TODO the number of bytes written can be less than specified,
 // so implement cyclic sending of all the data
 // Current limit for testing will be set to 1024
 int ConnectionSock::recieve(std::string& msg) {
-  char buffer[1024];
-  memset(&buffer, 0, sizeof(buffer));
+  size_t length = 0;
+  std::string filename;
+  std::string data;
 
-  int n = recv(clientfd, buffer, sizeof(buffer), 0);
+  int n = recv(clientfd, reinterpret_cast<char*>(&length), sizeof(size_t), 0);
+  std::cout << "Recieved size: " << length << std::endl;
   
-  if (n < 0)
-    perror("Error recieving from socket");
+  char buffer[128];
+  n = recv(clientfd, buffer, 128, 0); // Get the filename of the recieved file
 
-  msg = std::string(buffer, n);
+  filename.append(buffer, 128);
+
+  char* dataBuffer = new char[length];
+  n = recv(clientfd, dataBuffer, length, 0);
+
+  msg = std::string(dataBuffer, length);
+
+  //char buffer[1024];
+  //memset(&buffer, 0, sizeof(buffer));
+
+  //n = recv(clientfd, buffer, sizeof(buffer), 0);
+  //
+  //if (n < 0)
+  //  perror("Error recieving from socket");
+
+  //msg = std::string(buffer, n);
 
   return n;
 }
