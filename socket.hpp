@@ -4,7 +4,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <string>
-
+#include <fstream>
 
 class ConnectionSock {
   int clientfd;
@@ -18,6 +18,7 @@ class ConnectionSock {
   ConnectionSock(std::string IPOrHost, std::string port); 
 
   int send(std::string msg);
+  int sendFile(std::fstream& file, std::string& filename);
   int recieve(std::string& msg);
   bool exists();
   void close();

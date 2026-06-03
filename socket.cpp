@@ -87,15 +87,6 @@ ConnectionSock::ConnectionSock(std::string IPOrHost, std::string port) {
 }
 // TODO make the display of errors more consistent
 
-/* Parameter is a message to be sent to another socket.
- * A single 'packet' contains a filename (nothing if simple text message),
- * size of data and data itself (actual payload).
- *
- * It is not guaranteed for everything to be sent in single send, so
- * it iterates until everything is sent
- *
- * Returns 0 on success and 1 on failure.
- * */
 
 int ConnectionSock::_sendPart(void* buffer, uint64_t length) {
   uint64_t transmitted = 0;
@@ -109,15 +100,42 @@ int ConnectionSock::_sendPart(void* buffer, uint64_t length) {
 
   return 0;
 }
+// TODO implement htons or network file order
+int ConnectionSock::sendFile(std::fstream& file, std::string& filename) {
+  // Get length of file
+  file.seekg(0, file.end);
+  uint64_t fileLength = file.tellg();
+  file.seekg(0, file.beg);
+  
+  // Get length of filename
+  uint16_t filenameLength = filename.size();
+  std::cout << "Sending filename length of: " << filenameLength << "and filename is: " << filename << std::endl;
+  // Create buffer for data and read data into it
+  std::vector<char> dataBuffer(fileLength);
+  file.read(dataBuffer.data(), fileLength);
+
+  file.close();
+  // Sending each field separately
+  this->_sendPart(&fileLength, 8);
+  this->_sendPart(&filenameLength, 2);
+  this->_sendPart(filename.data(), filenameLength);
+  this->_sendPart(dataBuffer.data(), fileLength);
+
+  return 0;
+}
 
 int ConnectionSock::send(std::string msg) {
   std::string message;
   uint64_t msgSize = msg.size();
   std::cout << msgSize << std::endl;
-  std::string filename(128, '\0');
+  std::string filename = "";
+  uint16_t filenameLength = 0;
+  
 
   this->_sendPart(&msgSize, 8);
-  this->_sendPart(filename.data(), 128);
+  this->_sendPart(&filenameLength, 2);
+  // No need for sending 0 bytes
+  //this->_sendPart(filename.data(), filenameLength);
   this->_sendPart(msg.data(), msgSize);
 
   return 0;
@@ -139,31 +157,38 @@ int ConnectionSock::_recievePart(void* buffer, uint64_t length) {
 /* Cyclically recieves every part of the packet sent by send method of other socket.*/
 int ConnectionSock::recieve(std::string& msg) {
   uint64_t length = 0;
+  uint16_t filenameLength = 0;
   std::string filename;
   std::string data;
   
   int n = -1;
+
   
   n = this->_recievePart(&length, sizeof(length));
   if (n < 0)
     std::cerr << "Error while recieving length of data\n";
   std::cout << "Recieved length: " << length << std::endl;
-
-  char filenameBuffer[128];
-  n = this->_recievePart(filenameBuffer, 128);
+  
+  n = this->_recievePart(&filenameLength, sizeof(filenameLength));
   if (n < 0)
-    std::cerr << "Error while recieving filename\n";
-  filename = std::string(filenameBuffer, 128);
-  std::cout << "Recieved filename: " << filename << std::endl;
+    std::cerr << "Error while recieving length of filename\n";
+  std::cout << "Recieved filename length: " << filenameLength << std::endl;
+  
+  if (filenameLength > 0) { // Reading filename only if file was sent
+    std::vector<char> filenameBuffer(filenameLength);
 
+    n = this->_recievePart(filenameBuffer.data(), filenameLength);
+    if (n < 0)
+      std::cerr << "Error while recieving filename\n";
+    filename = std::string(filenameBuffer.data(), filenameLength);
+    std::cout << "Recieved filename: " << filename << std::endl;
+  }
   std::vector<char> dataBuffer(length);
   n = this->_recievePart(dataBuffer.data(), length);
   if (n < 0)
     std::cerr << "Error while recieving data\n";
   data = std::string(dataBuffer.data(), length);
 
-  std::cout << "Recieved data: " << data << std::endl;
-  
   msg = data;
 
   return 0;
