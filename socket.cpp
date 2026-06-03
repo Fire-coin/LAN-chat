@@ -5,6 +5,9 @@
 #include <sys/types.h> 
 #include <netdb.h>
 #include <iostream>
+#include <cstdint>
+#include <vector>
+
 MonitorSock::MonitorSock() {
   // IPv4 TCP socket
   this->serverfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -93,86 +96,75 @@ ConnectionSock::ConnectionSock(std::string IPOrHost, std::string port) {
  *
  * Returns 0 on success and 1 on failure.
  * */
+
+int ConnectionSock::_sendPart(void* buffer, uint64_t length) {
+  uint64_t transmitted = 0;
+  int n = -1;
+  while (transmitted < length) {
+    n = ::send(this->clientfd, buffer + transmitted, length - transmitted, 0);
+    if (n < 0)
+      return -1;
+    transmitted += n;
+  }
+
+  return 0;
+}
+
 int ConnectionSock::send(std::string msg) {
   std::string message;
-  size_t msgSize = msg.size();
+  uint64_t msgSize = msg.size();
   std::cout << msgSize << std::endl;
-  message.append(reinterpret_cast<const char*>(&msgSize), sizeof(size_t)); 
-  message.append(128, '\0'); // No filename for text message
-  message.append(msg);
-  
-  int n = -1;
-  while (msgSize > 0) {
-    n = ::send(clientfd, message.c_str(), message.size(), 0);
-    if (n < 0) {
-      perror("Error while sending message");
-      return 1;
-    }
-    msgSize -= n;
-  }
+  std::string filename(128, '\0');
+
+  this->_sendPart(&msgSize, 8);
+  this->_sendPart(filename.data(), 128);
+  this->_sendPart(msg.data(), msgSize);
 
   return 0;
 }
 // TODO Try to recieve everything as a single packet in order to reduce lines of code written
 
+int ConnectionSock::_recievePart(void* buffer, uint64_t length) {
+  uint64_t recieved = 0;
+  int n = -1;
+  while (recieved < length) {
+    n = recv(this->clientfd, buffer + recieved, length - recieved, 0);
+    if (n < 0)
+      return 1;
+    recieved += n;
+  }
+  return 0;
+}
+
 /* Cyclically recieves every part of the packet sent by send method of other socket.*/
 int ConnectionSock::recieve(std::string& msg) {
-  size_t length = 0;
+  uint64_t length = 0;
   std::string filename;
   std::string data;
   
   int n = -1;
+  
+  n = this->_recievePart(&length, sizeof(length));
+  if (n < 0)
+    std::cerr << "Error while recieving length of data\n";
+  std::cout << "Recieved length: " << length << std::endl;
 
-  int lengthBytes = sizeof(size_t);
-  int lengthRecieved = 0;
-  char* lengthBuffer = new char[lengthBytes];
-  // Repeatedly recieving exactly lengthBytes bytes to determine length of message 
-  while (lengthBytes > lengthRecieved) {
-    n = recv(clientfd, &lengthBuffer[lengthRecieved], lengthBytes - lengthRecieved, 0);
-    if (n < 0) {
-      perror("Error while recieving length of message");
-      return 1;
-    }
-    lengthRecieved += n;
-  }
-  
-  length = *reinterpret_cast<size_t*>(lengthBuffer);
-  std::cout << "Recieved size: " << length << std::endl;
-  
-  delete[] lengthBuffer;
-  
-  int filenameRecieved = 0;
-  char buffer[128];
-  // Repeatedly recieving until 128 bytes of filename have been recieved
-  while (filenameRecieved < 128) {
-    // Get the filename of the recieved file
-    n = recv(clientfd, &buffer[filenameRecieved], 128 - filenameRecieved, 0); 
-    if (n < 0) {
-      perror("Error while recieving filename of message");
-      return 1;
-    }
-    filenameRecieved += n;
-  }
-  filename.append(buffer, 128);
-
+  char filenameBuffer[128];
+  n = this->_recievePart(filenameBuffer, 128);
+  if (n < 0)
+    std::cerr << "Error while recieving filename\n";
+  filename = std::string(filenameBuffer, 128);
   std::cout << "Recieved filename: " << filename << std::endl;
 
-  
-  char* dataBuffer = new char[length];
-  int dataRecieved = 0;
-  // Repeatedly recieving until length bytes of data(payload) have been recieved
-  while (dataRecieved < length) {
-    n = recv(clientfd, &dataBuffer[dataRecieved], length - dataRecieved, 0);
-    if (n < 0) {
-      perror("Error while recieving data of message");
-      return 1;
-    }
-    dataRecieved += n;
-  }
+  std::vector<char> dataBuffer(length);
+  n = this->_recievePart(dataBuffer.data(), length);
+  if (n < 0)
+    std::cerr << "Error while recieving data\n";
+  data = std::string(dataBuffer.data(), length);
 
-  msg = std::string(dataBuffer, length);
+  std::cout << "Recieved data: " << data << std::endl;
   
-  delete[] dataBuffer;
+  msg = data;
 
   return 0;
 }

@@ -5,16 +5,13 @@
 #include <netinet/in.h>
 #include <string>
 
-struct Msg {
-  char filaname[128];
-  int dataLength;
-  std::string data; 
-};
-
 
 class ConnectionSock {
   int clientfd;
   std::string port, IPOrHost;
+
+  int _recievePart(void* buffer, uint64_t length);
+  int _sendPart(void* buffer, uint64_t length);
 
   public:
   ConnectionSock(int cfd);
