@@ -6,6 +6,11 @@
 #include <string>
 #include <fstream>
 
+struct Msg {
+  std::string filename;
+  std::string data;
+};
+
 class ConnectionSock {
   int clientfd;
   std::string port, IPOrHost;
@@ -19,7 +24,7 @@ class ConnectionSock {
 
   int send(std::string msg);
   int sendFile(std::fstream& file, std::string& filename);
-  int recieve(std::string& msg);
+  int recieve(Msg& msg);
   bool exists();
   void close();
 };

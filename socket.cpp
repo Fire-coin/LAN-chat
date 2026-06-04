@@ -40,6 +40,7 @@ ConnectionSock MonitorSock::accept() {
 // It will be user's responsibility to close all Connection sockets created from this Monitor socket
 void MonitorSock::close() {
   ::close(this->serverfd);
+  this->clientfd = -1;
 }
 
 bool MonitorSock::exists() {
@@ -155,7 +156,7 @@ int ConnectionSock::_recievePart(void* buffer, uint64_t length) {
 }
 
 /* Cyclically recieves every part of the packet sent by send method of other socket.*/
-int ConnectionSock::recieve(std::string& msg) {
+int ConnectionSock::recieve(Msg& msg) {
   uint64_t length = 0;
   uint16_t filenameLength = 0;
   std::string filename;
@@ -165,37 +166,46 @@ int ConnectionSock::recieve(std::string& msg) {
 
   
   n = this->_recievePart(&length, sizeof(length));
-  if (n < 0)
+  if (n < 0) {
     std::cerr << "Error while recieving length of data\n";
+    return 1;
+  }
   std::cout << "Recieved length: " << length << std::endl;
   
   n = this->_recievePart(&filenameLength, sizeof(filenameLength));
-  if (n < 0)
+  if (n < 0) {
     std::cerr << "Error while recieving length of filename\n";
+    return 1;
+  }
   std::cout << "Recieved filename length: " << filenameLength << std::endl;
   
   if (filenameLength > 0) { // Reading filename only if file was sent
     std::vector<char> filenameBuffer(filenameLength);
 
     n = this->_recievePart(filenameBuffer.data(), filenameLength);
-    if (n < 0)
+    if (n < 0) {
       std::cerr << "Error while recieving filename\n";
-    filename = std::string(filenameBuffer.data(), filenameLength);
-    std::cout << "Recieved filename: " << filename << std::endl;
-  }
+      return 1;
+    }
+    msg.filename = std::string(filenameBuffer.data(), filenameLength);
+    std::cout << "Recieved filename: " << msg.filename << std::endl;
+  } else
+    msg.filename = "";
+
   std::vector<char> dataBuffer(length);
   n = this->_recievePart(dataBuffer.data(), length);
-  if (n < 0)
+  if (n < 0) {
     std::cerr << "Error while recieving data\n";
-  data = std::string(dataBuffer.data(), length);
-
-  msg = data;
+    return 1;
+  }
+  msg.data = std::string(dataBuffer.data(), length);
 
   return 0;
 }
 
 void ConnectionSock::close() {
   ::close(this->clientfd);
+  this->clientfd = -1;
 }
 
 
