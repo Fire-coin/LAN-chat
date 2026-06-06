@@ -93,7 +93,7 @@ int ConnectionSock::_sendPart(void* buffer, uint64_t length) {
   uint64_t transmitted = 0;
   int n = -1;
   while (transmitted < length) {
-    n = ::send(this->clientfd, buffer + transmitted, length - transmitted, 0);
+    n = ::send(this->clientfd, static_cast<char*>(buffer) + transmitted, length - transmitted, 0);
     if (n < 0)
       return -1;
     transmitted += n;
@@ -110,7 +110,7 @@ int ConnectionSock::sendFile(std::fstream& file, std::string& filename) {
   
   // Get length of filename
   uint16_t filenameLength = filename.size();
-  std::cout << "Sending filename length of: " << filenameLength << "and filename is: " << filename << std::endl;
+  std::cout << "Sending filename length of: " << filenameLength << " and filename is: " << filename << std::endl;
   // Create buffer for data and read data into it
   std::vector<char> dataBuffer(fileLength);
   file.read(dataBuffer.data(), fileLength);
@@ -147,7 +147,7 @@ int ConnectionSock::_recievePart(void* buffer, uint64_t length) {
   uint64_t recieved = 0;
   int n = -1;
   while (recieved < length) {
-    n = recv(this->clientfd, buffer + recieved, length - recieved, 0);
+    n = recv(this->clientfd, static_cast<char*>(buffer) + recieved, length - recieved, 0);
     if (n < 0)
       return 1;
     recieved += n;

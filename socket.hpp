@@ -19,6 +19,7 @@ class ConnectionSock {
   int _sendPart(void* buffer, uint64_t length);
 
   public:
+  ConnectionSock() : clientfd(-1) {};
   ConnectionSock(int cfd);
   ConnectionSock(std::string IPOrHost, std::string port); 
 
