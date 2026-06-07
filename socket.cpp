@@ -170,14 +170,14 @@ int ConnectionSock::recieve(Msg& msg) {
     std::cerr << "Error while recieving length of data\n";
     return 1;
   }
-  std::cout << "Recieved length: " << length << std::endl;
+  //std::cout << "Recieved length: " << length << std::endl;
   
   n = this->_recievePart(&filenameLength, sizeof(filenameLength));
   if (n < 0) {
     std::cerr << "Error while recieving length of filename\n";
     return 1;
   }
-  std::cout << "Recieved filename length: " << filenameLength << std::endl;
+  //std::cout << "Recieved filename length: " << filenameLength << std::endl;
   
   if (filenameLength > 0) { // Reading filename only if file was sent
     std::vector<char> filenameBuffer(filenameLength);
@@ -188,7 +188,7 @@ int ConnectionSock::recieve(Msg& msg) {
       return 1;
     }
     msg.filename = std::string(filenameBuffer.data(), filenameLength);
-    std::cout << "Recieved filename: " << msg.filename << std::endl;
+    //std::cout << "Recieved filename: " << msg.filename << std::endl;
   } else
     msg.filename = "";
 

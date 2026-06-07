@@ -35,130 +35,49 @@ int recieve(ConnectionSock& socket, std::string& message);
 void monitor(int portNum);
 void establishConnection(ConnectionSock& conSock);
 void establishConnection(std::string IPOrHost, int portNum);
+// TODO add network scanning - using UDP sockets and small packets constantly broadcastet
+// TODO add function to retrieve private IP using getaddrinfo
 
+// Global variables used to control async processes
 bool acceptConnection = true;
-bool doConnection = false;
+bool doConnection = true;
 bool doListening = true;
 bool isConnected = false;
 
 int main() {
   std::cout << "Start of the Test\n";
   
-  //std::cout << "Select to be server(0) or client(1)\n";
   int choice;
-  //std::cin >> choice;
-  //if (choice != 0 && choice != 1)
-  //  return 0;
-
+  std::string buf; // Used to clear std::cin buffer
   int portNum = 55555;
-  int n; // Number of bytes written / read
   
-
-  Msg recievedMsg;
-  int useFile = 0;
-  std::string filepath;
-  std::string msg;
   // Both added to supress compiler warnings
   std::future<void> _monitorRequest;
   std::future<void> _sendingRequest;
   
-  _monitorRequest = std::async(std::launch::async, [portNum]() { monitor(portNum); });
+  std::cout << "Do you want to start monitoring(1 / 0): ";
+  std::cin >> choice;
+  
+  if (choice == 1)
+    _monitorRequest = std::async(std::launch::async, [portNum]() { monitor(portNum); });
  
-
-  while (doListening) {
-    while (!isConnected) {
-      std::cout << "Start connection(0 / 1): ";
+  // TODO run this on a separate thread so it can be cancelled unlike async
+  while (doListening && !isConnected) {
+    std::cout << "Start connection(0 / 1): ";
+    std::cin >> choice;
+   // std::getline(std::cin, buf);
+    
+    if (!isConnected && choice == 1)
+      _sendingRequest = std::async(std::launch::async, [portNum]() { establishConnection("localhost", portNum); });
+    else if (choice == 0 && !isConnected) {
+      std::cout << "Exit app (1 / 0)?: ";
       std::cin >> choice;
-      
-      if (!isConnected && choice == 1) 
-        _sendingRequest = std::async(std::launch::async, [portNum]() { establishConnection("localhost", portNum); });
-      else if (choice == 0) {
-        std::cout << "Exit app (1 / 0)?: ";
-        std::cin >> choice;
-        if (choice == 1)
-          exit(0);
+     // std::getline(std::cin, buf);
+      if (choice == 1)
+        exit(0);
     }
   } 
   
-  
-
-
-  // if (choice == 0) {
-  //   // Launching socket which will always listen
-  //    
-
-  //   std::getline(std::cin, msg); // Clear the buffer
-  //   while (msg != "exit" && conSock.exists()) {
-  //     std::cout << "Do you want to send file?(no=0)(yes=1): ";
-  //     std::cin >> useFile ;
-  //     std::getline(std::cin, filepath); // Clearing the buffer
-  //     
-  //     if (useFile == 1) {
-  //       std::cout << "Enter filapath: ";
-  //       std::getline(std::cin, filepath);
-  //       
-  //       if (!sendFile(conSock, filepath)) // Nothing transmitted, so other end cannot send anything either
-  //         continue;
-
-  //     } else if (useFile == 0) {
-  //         std::cout << "Enter message to send to other device: ";
-  //         std::getline(std::cin, msg);
-  //         if (!sendMessage(conSock, msg))
-  //           continue;
-  //     }
-  //      
-  //     n = recieve(conSock, msg);
-  //     if (n == 1 || n == 3) // Some error
-  //       continue; // Handle them later
-  //     if (n == 2) 
-  //       std::cout << "Recieved message: " << msg << std::endl;
-  //     if (n == 4)
-  //       std::cout << "File recieved: " << msg << std::endl;
-  //   }
-  //   
-  //   if (conSock.exists())
-  //     conSock.close();
-  //   monSock.close();
-
-  // } else {
-  //   ConnectionSock conSock = ConnectionSock("localhost", "55555");
-
-  //   if (!conSock.exists())
-  //     error("Error connecting to Socket");
-  //   
-  //   std::getline(std::cin, msg);
-  //   while (msg != "exit") {
-  //     n = recieve(conSock, msg);
-  //     if (n == 1 || n == 3) // Some error
-  //       continue; // Handle them later
-  //     if (n == 2) 
-  //       std::cout << "Recieved message: " << msg << std::endl;
-  //     if (n == 4)
-  //       std::cout << "File recieved: " << msg << std::endl;
-  //     
-  //   
-  //     std::cout << "Do you want to send file?(no=0)(yes=1): ";
-  //     std::cin >> useFile ;
-  //     std::getline(std::cin, filepath); // Clearing the buffer
-  //     
-  //     if (useFile == 1) {
-  //       std::cout << "Enter filapath: ";
-  //       std::getline(std::cin, filepath);
-  //       
-  //       if (!sendFile(conSock, filepath)) // Nothing transmitted, so other end cannot send anything either
-  //         continue;
-
-  //     } else if (useFile == 0) {
-  //         std::cout << "Enter message to send to other device: ";
-  //         std::getline(std::cin, msg);
-  //         if (!sendMessage(conSock, msg))
-  //           continue;
-  //     }
-  //   }
-
-  //   conSock.close();
-
-  }
   return 0;
 }
 
@@ -241,7 +160,7 @@ int recieve(ConnectionSock& socket, std::string& message) {
   
   dirName.append("/");
   dirName.append(msg.filename);
-  std::cout << "Writing file to: " << dirName << std::endl;
+  //std::cout << "Writing file to: " << dirName << std::endl;
   std::fstream file(dirName, std::fstream::out | std::fstream::binary);
   if (!file.is_open())
     return 3; // Error with file
@@ -260,11 +179,12 @@ void monitor(int portNum) {
   
   //TODO handle this better
   if (monSock.bind(portNum))
-      error("Error while monitoring socket");
+      appError("Error while monitoring socket");
 
   monSock.listen();
   while (doListening) { 
     if (acceptConnection) {
+      acceptConnection = false;
       conSock.close();
       conSock = monSock.accept();
       // Establishing connection with socket
@@ -275,8 +195,10 @@ void monitor(int portNum) {
   }
   monSock.close();
 }
-
+/* Makes connection with tcp socket.
+ * Displays recieved messages / files and prompts to send messages / files*/
 void establishConnection(ConnectionSock& conSock) {
+  std::cout << "Establish connection 2\n";
   if (!conSock.exists())
     error("Error while creating connection socket");
   
@@ -293,6 +215,7 @@ void establishConnection(ConnectionSock& conSock) {
   std::getline(std::cin, sendMsg); // Clear the buffer
   // TODO add condition which will be possible to terminate from other thread
   while (sendMsg != "exit" && conSock.exists() && recvMsg != "exit") {
+    // Start with a new request to send when there is none currently
     if (!isRequestSending) {
       isRequestSending = true;
       
@@ -303,12 +226,10 @@ void establishConnection(ConnectionSock& conSock) {
       if (useFile == 1) {
         std::cout << "Enter filapath: ";
         std::getline(std::cin, filepath);
-        // TODO fix this error, it treats last argument in function as a reference even though it is not
         sendResponce = std::async(std::launch::async, [&conSock, filepath]() { return sendFile(conSock, filepath); });
       } else if (useFile == 0) {
         std::cout << "Enter message to send to other device: ";
         std::getline(std::cin, sendMsg);
-        // TODO some more bs here
         sendResponce = std::async(std::launch::async, [&conSock, sendMsg]() { return sendMessage(conSock, sendMsg); });
       }
     }
@@ -321,7 +242,7 @@ void establishConnection(ConnectionSock& conSock) {
       }
       isRequestSending = false;
     }
-    
+    // Start new recieving request only if none is currently pending 
     if (!isRequestRecieving) {
       isRequestRecieving = true;
        
@@ -335,21 +256,26 @@ void establishConnection(ConnectionSock& conSock) {
 
       if (n == 1 || n == 3) // Some error
         continue; // Handle them later
-      if (n == 2) 
-        std::cout << "Recieved message: " << recvMsg << std::endl;
-      if (n == 4)
-        std::cout << "File recieved: " << recvMsg << std::endl;
-      isRequestRecieving = false;
+      if (n == 2 || n == 4) {
+        std::cout << "No send" << std::endl;
+        if (n == 2) 
+          std::cout << "Recieved message: " << recvMsg << std::endl;
+        if (n == 4)
+          std::cout << "File recieved: " << recvMsg << std::endl;
+        isRequestRecieving = false;
+      }
     }
   }
   isConnected = false;
   doConnection = true;
+  acceptConnection = true;
   conSock.close();
 }
 
-
+// TODO convert IPOrHost with inet_pton into binary value
 void establishConnection(std::string IPOrHost, int portNum) {
   if (doConnection) {
+    std::cout << "Establish connection 1\n";
     ConnectionSock conSock = ConnectionSock(IPOrHost, std::to_string(portNum));
     establishConnection(conSock);
   }
