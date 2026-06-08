@@ -28,7 +28,7 @@ class UDPDiscoverySock {
   int sendPresence(int delay);
   int recievePacket(std::string& senderIP, std::string& nickname, int delay);
   void changeNickname(std::string newNickname);
-}
+};
 
 class ConnectionSock {
   int clientfd;

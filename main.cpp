@@ -11,6 +11,8 @@
 #include <future>
 #include <chrono>
 #include <string>
+#include <mutex>
+#include <algorithm>
 
 namespace fs = std::filesystem;
 
@@ -43,6 +45,20 @@ bool acceptConnection = true;
 bool doConnection = true;
 bool doListening = true;
 bool isConnected = false;
+bool doPeerDiscovery = true;
+
+// Stores all needed information about peers
+struct Peer {
+  std::string IP;
+  std::string nickname;
+  std::chrono::steady_clock::time_point lastSeen;
+};
+// Processes write new peers here and remove ones which did not respond for last 3 seconds
+std::vector<Peer> currentPeers;
+
+std::mutex discoverMutex;
+
+void discoverPeers(int portNum);
 
 int main() {
   std::cout << "Start of the Test\n";
@@ -281,4 +297,71 @@ void establishConnection(std::string IPOrHost, int portNum) {
   }
 }
 
+void discoverPeers(int portNum) {
+  UDPDiscoverySock uSock = UDPDiscoverySock();
 
+  if (uSock.bind(portNum) < 0) {
+    appError("Discovery socket binding failure");
+    perror("");
+  }
+  
+  bool isSendingPacket = false;
+  bool isRecievingPacket = false;
+  std::future<int> packetSendError, packetRecvError;
+
+  int sendDelay = 1000; // In milliseconds
+  int recvDelay = 500; // In milliseconds
+
+  std::string nickname, IP; 
+
+  while (doPeerDiscovery) {
+    if (!isSendingPacket) { 
+      packetSendError = std::async(std::launch::async, [sendDelay, &uSock]() { return uSock.sendPresence(sendDelay); });
+    }
+    
+    auto sendStatus = packetSendError.wait_for(std::chrono::milliseconds(0));
+    if (sendStatus == std::future_status::ready) {
+      int SendError = packetSendError.get();
+      if (SendError < 0) {
+        appError("Error while sending over UDP socket");
+        perror("");
+      }
+    }
+    // TODO make this part more unnested, cause its pain to look at 
+    if (!isRecievingPacket) {
+      packetRecvError = std::async(std::launch::async, [recvDelay, &uSock, &IP, &nickname]() { return uSock.recievePacket(IP, nickname, recvDelay); });
+    }
+
+    auto recvStatus = packetRecvError.wait_for(std::chrono::milliseconds(0));
+
+    if (recvStatus == std::future_status::ready) {
+      int recvError = packetRecvError.get();
+      discoverMutex.lock();
+      if (recvError < 0) {
+        if (recvError == -1) {
+          appError("Error while recieving UDP packet");
+          perror("");
+        }
+      } else {
+        if (find_if(currentPeers.begin(), currentPeers.end(), [IP](Peer& peer) { return peer.IP == IP; }) == currentPeers.end()) {
+          Peer p;
+          p.IP = IP;
+          p.nickname = nickname;
+          p.lastSeen = std::chrono::steady_clock::now();
+          
+          currentPeers.push_back(p);
+        }
+      }
+      // Scan if some of the peers are offline
+      for (auto it = currentPeers.begin(); it != currentPeers.end();) {
+        // If last packet recieved from this IP was more than 3 seconds ago
+        if (std::chrono::steady_clock::now() - it->lastSeen > std::chrono::milliseconds(3000))
+          it = currentPeers.erase(it);
+        else
+          ++it;
+      }
+
+      discoverMutex.unlock();
+    }
+  }
+}
