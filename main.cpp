@@ -62,6 +62,8 @@ std::mutex discoverMutex;
 void discoverPeers(int portNum);
 void showPeers();
 
+std::vector<std::string> getMachineIPs();
+
 int main() {
   std::cout << "Start of the Test\n";
   
@@ -73,6 +75,10 @@ int main() {
   std::future<void> _monitorRequest;
   std::future<void> _sendingRequest;
   
+  std::vector<std::string> IPs = getMachineIPs();
+  for (auto ip : IPs) 
+    std::cout << "IP found: " << ip << std::endl;
+
   // Currently doing test for UDP discovery
   std::future<void> _discoverRequest = std::async(std::launch::async, [discoveryPortNum]() { discoverPeers(discoveryPortNum); });
   int i = 0;
@@ -392,4 +398,35 @@ void showPeers() {
   for (auto it = currentPeers.begin(); it != currentPeers.end(); ++it)
     std::cout << "IP: " << it->IP << "; nickname: " << it->nickname << std::endl;
   discoverMutex.unlock();
+}
+
+std::vector<std::string> getMachineIPs() {
+  std::vector<std::string> IPs;
+  struct ifaddrs *ifaddr;
+  int family, s;
+  char host[NI_MAXHOST];
+
+  if (getifaddrs(&ifaddr) == -1)
+    perror("getifaddrs");
+  
+  for (struct ifaddrs *ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+    if (ifa->ifa_addr == NULL)
+      continue;
+
+    family = ifa->ifa_addr->sa_family;
+
+    if (family == AF_INET) {
+      s = getnameinfo(ifa->ifa_addr, sizeof(sockaddr_in), host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+
+      if (s != 0) {
+        std::string msg = "getnameinfo failed: ";
+        msg.append(gai_strerror(s));
+        appError(msg);
+      }
+      if (std::string(host) != "127.0.0.1")
+        IPs.push_back(std::string(host));
+    }
+  }
+  freeifaddrs(ifaddr);
+  return IPs;
 }
