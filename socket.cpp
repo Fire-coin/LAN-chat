@@ -7,6 +7,76 @@
 #include <iostream>
 #include <cstdint>
 #include <vector>
+#include <sstream>
+
+
+//TODO GLOBALLY put htonl, htons and custom one for 8 bytes everywhere when sending port numbers and numbers
+
+UDPDiscoverySock::UDPDiscoverySock() {
+  this->sockFd = socket(AF_INET, SOCK_DGRAM, 0);
+  memset(&this->addr, 0, sizeof(this->addr));
+}
+
+UDPDiscoverySock::UDPDiscoverySock(std::string nickname) {
+  this->UDPDiscoverySock();
+  this->changeNickname(nickname);
+}
+
+
+int UDPDiscoverySock::bind(int portNum) {
+  this->portNum = portNum;
+  this->broadcastAddr.sin_family = AF_INET; // IPv4
+  this->broadcastAddr.sin_port = htons(portNum); 
+  this->broadcastAddr.sin_addr = inet_addr("255.255.255.255");
+
+  return ::bind(this->sockFd, (struct sockaddr* ) &this->broadcastAddr, sizeof(this->broadcastAddr));
+}
+
+
+int UDPDiscoverySock::sendPresence(int delay) {
+  std::string message;
+  // Message will be in form LAN-chat|<nickname>|<portNum>
+  // where <nickname> means value of nickname
+  message.append("LAN-chat|");
+  message.append((nickname == "") ? "unknown" : nickname);
+  message.append("|");
+  message.append(std::to_string(this->portNum));
+
+  socklen_t broadcastLen = sizeof(this->broadcastAddr)
+  
+  int n = sendto(this->sockFd, message.data(), message.size(), 0, (struct sockaddr*) &this->broadcastAddr, broadcastLen);
+  std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+  return n;
+}
+
+
+int UDPDiscoverySock::recievePacket(std::string& senderIP, std::string& nickname, int delay) {
+  std::vector<char> buffer(MAX_UDP_PACKET_SIZE);
+  socklen_t senderLen = sizeof(this->senderAddr);
+  int n = recvfrom(this->sockFd, buffer.data(), MAX_UDP_PACKET_SIZE, 0, (struct sockaddr*) &this->senderAddr, senderLen);
+  std::string msg(buffer.data(), buffer.size());
+  std::stringstream ss(msg);
+  if (msg.find_first_of('|', 0) == msg.npos)
+    return -1;
+  std::string appVer, nick, port;
+  std::getline(ss, appVer, '|');
+  if (appVer != "LAN-chat")
+    return -1;
+  std::getline(ss, nick, '|');
+  std::getline(ss, port, '|');
+  if (port != std::to_string(this->portNum))
+    return -1;
+
+  // TODO add check to see if the packet arrived from the other LAN-chat Peer
+  // TODO also add nickname separation from packet
+  senderIP = inet_ntoa(this->senderAddr.sin_addr);
+  std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+  return n;
+}
+// TODO add checking for max length of nickname
+void UDPDiscoverySock::changeNickname(std::string newNickname) {
+  this->nickname = newNickname;
+}
 
 MonitorSock::MonitorSock() {
   // IPv4 TCP socket

@@ -6,10 +6,29 @@
 #include <string>
 #include <fstream>
 
+constexpr int MAX_UDP_PACKET_SIZE = 128;
+
 struct Msg {
   std::string filename;
   std::string data;
 };
+
+class UDPDiscoverySock {
+  int sockFd;
+  int portNum;
+  std::string nickname;
+  struct sockaddr_in broadcastAddr, senderAddr;
+
+
+  public:
+  UDPDiscoverySock(std::string nickname);
+  UDPDiscoverySock();
+  
+  int bind(int portNum);
+  int sendPresence(int delay);
+  int recievePacket(std::string& senderIP, std::string& nickname, int delay);
+  void changeNickname(std::string newNickname);
+}
 
 class ConnectionSock {
   int clientfd;
