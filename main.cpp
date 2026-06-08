@@ -322,6 +322,8 @@ void discoverPeers(int portNum) {
     appError("Discovery socket binding failure");
     perror("");
   }
+
+  std::vector<std::string> IPs = getMachineIPs();
   
   bool isSendingPacket = false;
   bool isRecievingPacket = false;
@@ -367,12 +369,15 @@ void discoverPeers(int portNum) {
       } else {
         auto it = find_if(currentPeers.begin(), currentPeers.end(), [IP](Peer& peer) { return peer.IP == IP; });
         if (it == currentPeers.end()) {
-          Peer p;
-          p.IP = IP;
-          p.nickname = nickname;
-          p.lastSeen = std::chrono::steady_clock::now();
-          
-          currentPeers.push_back(p);
+          // Ignore if IP is one of the machine ones
+          if (find_if(IPs.begin(), IPs.end(), [IP](std::string& ip) {return ip == IP; }) == IPs.end()) {
+            Peer p;
+            p.IP = IP;
+            p.nickname = nickname;
+            p.lastSeen = std::chrono::steady_clock::now();
+            
+            currentPeers.push_back(p);
+          }
         } else {
           it->lastSeen = std::chrono::steady_clock::now();
         }
@@ -397,6 +402,7 @@ void showPeers() {
   std::cout << "========== Available peers ==========\n";
   for (auto it = currentPeers.begin(); it != currentPeers.end(); ++it)
     std::cout << "IP: " << it->IP << "; nickname: " << it->nickname << std::endl;
+  std::cout << "=====================================\n";
   discoverMutex.unlock();
 }
 
