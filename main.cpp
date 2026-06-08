@@ -74,43 +74,47 @@ int main() {
   // Both added to supress compiler warnings
   std::future<void> _monitorRequest;
   std::future<void> _sendingRequest;
-  
-  std::vector<std::string> IPs = getMachineIPs();
-  for (auto ip : IPs) 
-    std::cout << "IP found: " << ip << std::endl;
+  // std::vector<std::string> IPs = getMachineIPs();
+  // for (auto ip : IPs) 
+  //   std::cout << "IP found: " << ip << std::endl;
 
   // Currently doing test for UDP discovery
   std::future<void> _discoverRequest = std::async(std::launch::async, [discoveryPortNum]() { discoverPeers(discoveryPortNum); });
-  int i = 0;
-  while (true) {
-    //system("clear");
-    std::cout << "Iteration: " << i++ << std::endl;
-    showPeers();
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-  }
+  // int i = 0;
+  // while (true) {
+  //   //system("clear");
+  //   std::cout << "Iteration: " << i++ << std::endl;
+  //   showPeers();
+  //   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+  // }
 
-  //std::cout << "Do you want to start monitoring(1 / 0): ";
-  //std::cin >> choice;
-  //
-  //if (choice == 1)
-  //  _monitorRequest = std::async(std::launch::async, [portNum]() { monitor(portNum); });
+  std::cout << "Do you want to start monitoring(1 / 0): ";
+  std::cin >> choice;
+  
+  if (choice == 1)
+  _monitorRequest = std::async(std::launch::async, [portNum]() { monitor(portNum); });
  
-  //// TODO run this on a separate thread so it can be cancelled unlike async
-  //while (doListening && !isConnected) {
-  //  std::cout << "Start connection(0 / 1): ";
-  //  std::cin >> choice;
-  // // std::getline(std::cin, buf);
-  //  
-  //  if (!isConnected && choice == 1)
-  //    _sendingRequest = std::async(std::launch::async, [portNum]() { establishConnection("localhost", portNum); });
-  //  else if (choice == 0 && !isConnected) {
-  //    std::cout << "Exit app (1 / 0)?: ";
-  //    std::cin >> choice;
-  //   // std::getline(std::cin, buf);
-  //    if (choice == 1)
-  //      exit(0);
-  //  }
-  //} 
+  //TODO run this on a separate thread so it can be cancelled unlike async
+  while (doListening && !isConnected) {
+    std::cout << "Start connection(0 / 1): ";
+    std::cin >> choice;
+    // std::getline(std::cin, buf);
+    
+    if (!isConnected && choice == 1) {
+      std::cout << "Available devices: \n";
+      showPeers();
+      _sendingRequest = std::async(std::launch::async, [portNum]() { establishConnection("localhost", portNum); });
+    }
+    else if (choice == 0 && !isConnected) {
+      std::cout << "Exit app (1 / 0)?: ";
+      std::cin >> choice;
+      // std::getline(std::cin, buf);
+    
+      if (choice == 1)
+        exit(0);
+    }
+  }
+  
   
   return 0;
 }
