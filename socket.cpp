@@ -18,11 +18,19 @@
 
 UDPDiscoverySock::UDPDiscoverySock() {
   this->sockFd = socket(AF_INET, SOCK_DGRAM, 0);
+  const int enable = 1;
+  // TODO add error checking here
+  setsockopt(this->sockFd, SOL_SOCKET, SO_BROADCAST, &enable, sizeof(int));
+  setsockopt(this->sockFd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
   memset(&this->broadcastAddr, 0, sizeof(this->broadcastAddr));
 }
 
 UDPDiscoverySock::UDPDiscoverySock(std::string nickname) {
   this->sockFd = socket(AF_INET, SOCK_DGRAM, 0);
+  const int enable = 1;
+  // TODO add error checking here
+  setsockopt(this->sockFd, SOL_SOCKET, SO_BROADCAST, &enable, sizeof(int));
+  setsockopt(this->sockFd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
   memset(&this->broadcastAddr, 0, sizeof(this->broadcastAddr));
   this->changeNickname(nickname);
 }

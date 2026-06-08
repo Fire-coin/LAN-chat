@@ -68,7 +68,7 @@ int main() {
   int choice;
   std::string buf; // Used to clear std::cin buffer
   int portNum = 55555;
-  int discoveryPortNum = 55554;
+  int discoveryPortNum = 5000;
   // Both added to supress compiler warnings
   std::future<void> _monitorRequest;
   std::future<void> _sendingRequest;
@@ -77,7 +77,7 @@ int main() {
   std::future<void> _discoverRequest = std::async(std::launch::async, [discoveryPortNum]() { discoverPeers(discoveryPortNum); });
   int i = 0;
   while (true) {
-    system("clear");
+    //system("clear");
     std::cout << "Iteration: " << i++ << std::endl;
     showPeers();
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
