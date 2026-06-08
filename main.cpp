@@ -103,7 +103,11 @@ int main() {
     if (!isConnected && choice == 1) {
       std::cout << "Available devices: \n";
       showPeers();
-      _sendingRequest = std::async(std::launch::async, [portNum]() { establishConnection("localhost", portNum); });
+      std::string ip;
+      std::cout << "Enter IP to connect to: ";
+      std::getline(std::cin, ip);
+      std::getline(std::cin, ip);
+      _sendingRequest = std::async(std::launch::async, [portNum, ip]() { establishConnection(ip, portNum); });
     }
     else if (choice == 0 && !isConnected) {
       std::cout << "Exit app (1 / 0)?: ";
