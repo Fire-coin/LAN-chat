@@ -17,7 +17,7 @@ class UDPDiscoverySock {
   int sockFd;
   int portNum;
   std::string nickname;
-  struct sockaddr_in broadcastAddr, senderAddr;
+  struct sockaddr_in broadcastAddr, transmitAddr ,senderAddr;
 
 
   public:

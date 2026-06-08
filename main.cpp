@@ -308,7 +308,7 @@ void establishConnection(std::string IPOrHost, int portNum) {
     establishConnection(conSock);
   }
 }
-
+// TODO abolish async and use threads because these do not return anything
 void discoverPeers(int portNum) {
   UDPDiscoverySock uSock = UDPDiscoverySock();
 
@@ -327,12 +327,14 @@ void discoverPeers(int portNum) {
   std::string nickname, IP; 
 
   while (doPeerDiscovery) {
-    if (!isSendingPacket) { 
+    if (!isSendingPacket) {
+      isSendingPacket = true;
       packetSendError = std::async(std::launch::async, [sendDelay, &uSock]() { return uSock.sendPresence(sendDelay); });
     }
     
     auto sendStatus = packetSendError.wait_for(std::chrono::milliseconds(0));
     if (sendStatus == std::future_status::ready) {
+      isSendingPacket = false;
       int SendError = packetSendError.get();
       if (SendError < 0) {
         appError("Error while sending over UDP socket");
@@ -341,12 +343,14 @@ void discoverPeers(int portNum) {
     }
     // TODO make this part more unnested, cause its pain to look at 
     if (!isRecievingPacket) {
+      isRecievingPacket = true;
       packetRecvError = std::async(std::launch::async, [recvDelay, &uSock, &IP, &nickname]() { return uSock.recievePacket(IP, nickname, recvDelay); });
     }
 
     auto recvStatus = packetRecvError.wait_for(std::chrono::milliseconds(0));
 
     if (recvStatus == std::future_status::ready) {
+      isRecievingPacket = false;
       int recvError = packetRecvError.get();
       discoverMutex.lock();
       if (recvError < 0) {
@@ -355,13 +359,16 @@ void discoverPeers(int portNum) {
           perror("");
         }
       } else {
-        if (find_if(currentPeers.begin(), currentPeers.end(), [IP](Peer& peer) { return peer.IP == IP; }) == currentPeers.end()) {
+        auto it = find_if(currentPeers.begin(), currentPeers.end(), [IP](Peer& peer) { return peer.IP == IP; });
+        if (it == currentPeers.end()) {
           Peer p;
           p.IP = IP;
           p.nickname = nickname;
           p.lastSeen = std::chrono::steady_clock::now();
           
           currentPeers.push_back(p);
+        } else {
+          it->lastSeen = std::chrono::steady_clock::now();
         }
       }
       // Scan if some of the peers are offline

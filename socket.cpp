@@ -42,7 +42,12 @@ int UDPDiscoverySock::bind(int portNum) {
   this->broadcastAddr.sin_port = htons(portNum); 
   inet_aton("255.255.255.255", &this->broadcastAddr.sin_addr);
 
-  return ::bind(this->sockFd, (struct sockaddr* ) &this->broadcastAddr, sizeof(this->broadcastAddr));
+  //TODO move to other place probably
+  this->transmitAddr.sin_family = AF_INET;
+  this->transmitAddr.sin_port = htons(portNum);
+  this->transmitAddr.sin_addr.s_addr = INADDR_ANY;
+
+  return ::bind(this->sockFd, (struct sockaddr* ) &this->transmitAddr, sizeof(this->transmitAddr));
 }
 
 
@@ -67,7 +72,7 @@ int UDPDiscoverySock::recievePacket(std::string& senderIP, std::string& nickname
   std::vector<char> buffer(MAX_UDP_PACKET_SIZE);
   socklen_t senderLen = sizeof(this->senderAddr);
   int n = recvfrom(this->sockFd, buffer.data(), MAX_UDP_PACKET_SIZE, 0, (struct sockaddr*) &this->senderAddr, &senderLen);
-  std::string msg(buffer.data(), buffer.size());
+  std::string msg(buffer.data(), n);
   std::stringstream ss(msg);
   if (msg.find_first_of('|', 0) == msg.npos)
     return -2;
@@ -83,6 +88,7 @@ int UDPDiscoverySock::recievePacket(std::string& senderIP, std::string& nickname
   // TODO add check to see if the packet arrived from the other LAN-chat Peer
   // TODO also add nickname separation from packet
   senderIP = inet_ntoa(this->senderAddr.sin_addr);
+  nickname = nick;
   std::this_thread::sleep_for(std::chrono::milliseconds(delay));
   return n;
 }
