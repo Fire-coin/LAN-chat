@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <curses.h> // TODO include in readme that this library has to be installed
 #include <utility> // for std::pair
+#include "UI.hpp"
 
 namespace fs = std::filesystem;
 
@@ -260,32 +261,63 @@ void establishConnection(ConnectionSock& conSock) {
 
   bool isRequestSending = false;
   bool isRequestRecieving = false;
+  bool isTakingInput = false;
   std::future<bool> sendResponce;
   std::future<int> recieveResponce;
+  std::future<std::string> inputResponce;
   std::string sendMsg, recvMsg, filepath;
   int useFile = 0;
 
   std::getline(std::cin, sendMsg); // Clear the buffer
   // TODO add condition which will be possible to terminate from other thread
   while (sendMsg != "exit" && conSock.exists() && recvMsg != "exit") {
-    // Start with a new request to send when there is none currently
-    if (!isRequestSending) {
-      isRequestSending = true;
-      
-      std::cout << "Do you want to send file?(no=0)(yes=1): ";
-      std::cin >> useFile ;
-      std::getline(std::cin, filepath); // Clearing the buffer
-      
-      if (useFile == 1) {
-        std::cout << "Enter filapath: ";
-        std::getline(std::cin, filepath);
-        sendMsg = "";
-        sendResponce = std::async(std::launch::async, [&conSock, filepath]() { return sendFile(conSock, filepath); });
-      } else if (useFile == 0) {
-        std::cout << "Enter message to send to other device: ";
-        std::getline(std::cin, sendMsg);
-        filepath = "";
-        sendResponce = std::async(std::launch::async, [&conSock, sendMsg]() { return sendMessage(conSock, sendMsg); });
+    // Start taking input
+    if (!isTakingInput) {
+      isTakingInput = true;
+      inputResponce = std::async(std::launch::async, []() { return getUserInput(); });
+    }
+
+    auto inputStatus = inputResponce.wait_for(std::chrono::milliseconds(0));
+    if (inputStatus == std::future_status::ready) {
+      // Start with a new request to send when there is none currently
+      if (!isRequestSending) {
+        isRequestSending = true;
+        isTakingInput = false;
+        std::string input = inputResponce.get();
+        std::string filename;
+        Msg msg;
+        msg.filename = "";
+        msg.data = "";
+        // Process input, check if user sent file or text message
+        if (input.find_first_of("$file=") == input.npos) { // Text message
+          msg.data = input;
+          sendResponce = std::async(std::launch::async, [&conSock, input]() { return sendMessage(conSock, input); });
+        } else { // File
+          int index = input.find_first_of("$file=");
+          filename = std::string(input.begin() + index + 7, input.end()); // We add + 7 bytes to start from the filename
+          msg.filename = filename;
+          sendResponce = std::async(std::launch::async, [&conSock, fiename]() { return sendFile(conSock, filename); });
+        }
+        addMsg(msg, 0); // Creator = 0 because data is being sent
+
+        
+
+
+        //std::cout << "Do you want to send file?(no=0)(yes=1): ";
+        //std::cin >> useFile ;
+        //std::getline(std::cin, filepath); // Clearing the buffer
+        //
+        //if (useFile == 1) {
+        //  std::cout << "Enter filapath: ";
+        //  std::getline(std::cin, filepath);
+        //  sendMsg = "";
+        //  sendResponce = std::async(std::launch::async, [&conSock, filepath]() { return sendFile(conSock, filepath); });
+        //} else if (useFile == 0) {
+        //  std::cout << "Enter message to send to other device: ";
+        //  std::getline(std::cin, sendMsg);
+        //  filepath = "";
+        //  sendResponce = std::async(std::launch::async, [&conSock, sendMsg]() { return sendMessage(conSock, sendMsg); });
+        //}
       }
     }
     // TODO add some way to separate streams when recieving and sending data
@@ -295,9 +327,6 @@ void establishConnection(ConnectionSock& conSock) {
       if (!sendSuccess) {
         // TODO handle error
       }
-      Msg msg;
-      msg.filename = filepath;
-      msg.data = sendMsg;
       addMsg(msg, 0); // The message was sent by this machine thats why second param is 0
       isRequestSending = false;
     }
