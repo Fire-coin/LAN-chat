@@ -14,6 +14,8 @@
 #include <mutex>
 #include <algorithm>
 #include <stdlib.h>
+#include <curses.h> // TODO include in readme that this library has to be installed
+#include <utility> // for std::pair
 
 namespace fs = std::filesystem;
 
@@ -38,8 +40,6 @@ int recieve(ConnectionSock& socket, std::string& message);
 void monitor(int portNum);
 void establishConnection(ConnectionSock& conSock);
 void establishConnection(std::string IPOrHost, int portNum);
-// TODO add network scanning - using UDP sockets and small packets constantly broadcastet
-// TODO add function to retrieve private IP using getaddrinfo
 // TODO set all global vaiables to false before exiting
 // Global variables used to control async processes
 bool acceptConnection = true;
@@ -63,6 +63,17 @@ void discoverPeers(int portNum);
 void showPeers();
 
 std::vector<std::string> getMachineIPs();
+
+
+// Chat history using Msg structure from socket.hpp
+
+// Stores the messages which were sent and by whom it was sent
+// Currently 0 will be messages sent and 1 messages recieved
+std::vector<std::pair<int, Msg>> chatHistory;
+
+std::mutex messageMutex;
+void addMsg(Msg msg, int creator);
+
 
 int main() {
   std::cout << "Start of the Test\n";
@@ -268,10 +279,12 @@ void establishConnection(ConnectionSock& conSock) {
       if (useFile == 1) {
         std::cout << "Enter filapath: ";
         std::getline(std::cin, filepath);
+        sendMsg = "";
         sendResponce = std::async(std::launch::async, [&conSock, filepath]() { return sendFile(conSock, filepath); });
       } else if (useFile == 0) {
         std::cout << "Enter message to send to other device: ";
         std::getline(std::cin, sendMsg);
+        filepath = "";
         sendResponce = std::async(std::launch::async, [&conSock, sendMsg]() { return sendMessage(conSock, sendMsg); });
       }
     }
@@ -282,6 +295,10 @@ void establishConnection(ConnectionSock& conSock) {
       if (!sendSuccess) {
         // TODO handle error
       }
+      Msg msg;
+      msg.filename = filepath;
+      msg.data = sendMsg;
+      addMsg(msg, 0); // The message was sent by this machine thats why second param is 0
       isRequestSending = false;
     }
     // Start new recieving request only if none is currently pending 
@@ -299,11 +316,20 @@ void establishConnection(ConnectionSock& conSock) {
       if (n == 1 || n == 3) // Some error
         continue; // Handle them later
       if (n == 2 || n == 4) {
-        std::cout << "No send" << std::endl;
-        if (n == 2) 
+        Msg msg;
+        // TODO make messages be possible to send both text and file
+        if (n == 2)  {
+          msg.filename = "";
+          msg.data = recvMsg;
+          addMsg(msg, 1); // Data recieved so creator = 1
           std::cout << "Recieved message: " << recvMsg << std::endl;
-        if (n == 4)
+        }
+        if (n == 4) {
+          msg.filename = recvMsg;
+          msg.data = "";
+          addMsg(msg, 1); // Data recievec so creator = 1
           std::cout << "File recieved: " << recvMsg << std::endl;
+        }
         isRequestRecieving = false;
       }
     }
@@ -443,4 +469,14 @@ std::vector<std::string> getMachineIPs() {
   }
   freeifaddrs(ifaddr);
   return IPs;
+}
+
+
+void addMsg(Msg msg, int creator) {
+  messageMutex.lock();
+
+  std::pair<int, Msg> temp = std::pair<int, Msg>(creator, msg);
+  chatLog.push_back(temp);
+
+  messageMutex.unlock();
 }
