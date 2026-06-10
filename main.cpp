@@ -70,7 +70,6 @@ std::vector<std::string> getMachineIPs();
 
 // Stores the messages which were sent and by whom it was sent
 // Currently 0 will be messages sent and 1 messages recieved
-std::vector<std::pair<int, Msg>> chatHistory;
 
 std::mutex messageMutex;
 void addMsg(Msg msg, int creator);
@@ -102,6 +101,7 @@ int main() {
   
   //Testing curses
   //testInputAndOutput();
+  displayChatScreen();
   
 
 
@@ -257,10 +257,10 @@ void monitor(int portNum) {
 /* Makes connection with tcp socket.
  * Displays recieved messages / files and prompts to send messages / files*/
 void establishConnection(ConnectionSock& conSock) {
-  //std::cout << "Establish connection 2\n";
+  std::cout << "Establish connection 2\n";
   if (!conSock.exists())
     error("Error while creating connection socket");
-  
+  initscr();
   isConnected = true;
   doConnection = false;
 
@@ -285,6 +285,7 @@ void establishConnection(ConnectionSock& conSock) {
 
     auto inputStatus = inputResponce.wait_for(std::chrono::milliseconds(0));
     if (inputStatus == std::future_status::ready) {
+      printw("Success to get string");
       // Start with a new request to send when there is none currently
       if (!isRequestSending) {
         isRequestSending = true;
@@ -333,6 +334,7 @@ void establishConnection(ConnectionSock& conSock) {
         // TODO handle error
       }
       addMsg(sendMsg, 0); // The message was sent by this machine thats why second param is 0
+      //displayChatLog(chatHistory);
       isRequestSending = false;
     }
     // Start new recieving request only if none is currently pending 
@@ -363,6 +365,8 @@ void establishConnection(ConnectionSock& conSock) {
           addMsg(msg, 1); // Data recievec so creator = 1
           //std::cout << "File recieved: " << recvMsg << std::endl;
         }
+        //displayChatLog(chatHistory);
+
         isRequestRecieving = false;
       }
     }
@@ -371,6 +375,7 @@ void establishConnection(ConnectionSock& conSock) {
   doConnection = true;
   acceptConnection = true;
   conSock.close();
+  endwin();
 }
 
 // TODO convert IPOrHost with inet_pton into binary value
