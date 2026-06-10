@@ -6,11 +6,12 @@
 #include <utility> // std::pair
 #include <string>
 
-std::string inputBuffer;
-bool acceptInputToBuffer;
+extern std::string inputBuffer;
+extern bool acceptInputToBuffer;
 
-void displayChatLog(std::vector<std:pair<int, Msg>>& chatLog);
+void displayChatLog(std::vector<std::pair<int, Msg>>& chatLog);
 std::string getUserInput();
+void testInputAndOutput();
 
 
 
