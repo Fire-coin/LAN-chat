@@ -16,6 +16,8 @@ extern std::vector<std::pair<int, Msg>> chatHistory;
 void displayChatLog(std::vector<std::pair<int, Msg>>& chatLog);
 std::string getUserInput();
 void displayChatScreen();
+int selector(std::vector<std::string>& options);
+
 
 
 

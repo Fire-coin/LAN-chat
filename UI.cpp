@@ -108,30 +108,60 @@ void displayChatScreen() {
 /* Displays option menu and returns the index of selected option */
 int selector(std::vector<std::string>& options) {
   initscr();
+  noecho();
+  cbreak(); // Immediately get key press
+
   int rows, cols;
   WINDOW* optionWin;
   
   getmaxyx(stdscr, rows, cols);
 
   optionWin = newwin(options.size(), cols, 0, 0);
+  keypad(optionWin, true);
+  curs_set(0); // Sets cursor to be invisible
 
   int current = 0;
   for (int i = 0; i < options.size(); ++i) {
     if (i == current) {
-      wprintw(optionWin, "[*] %s", options[i].c_str());
+      wprintw(optionWin, "[*] %s\n", options[i].c_str());
     } else
-      wprintw(optionWin, "[ ] %s", options[i].c_str());
+      wprintw(optionWin, "[ ] %s\n", options[i].c_str());
   }
+  wrefresh(optionWin);
   int ch;
+  bool update = false;
   while (1) {
-    for (int i = 0; i < options.size(); ++i) {
-      mvwdelch(optionWin, i, 1);
-      if (i == current)
-        mvwprintw(optionWin, i, 1, "*");
-    }
     ch = wgetch(optionWin);
     if (ch == 10) {
+      wclear(optionWin);
+      wrefresh(optionWin);
       return current;
+    }
+    update = true;
+    switch (ch) {
+      case KEY_UP:
+        if (current == 0)
+          current = options.size() - 1;
+        else
+          current--;
+        break;
+      case KEY_DOWN:
+        if (current == options.size() - 1)
+          current = 0;
+        else
+          current++;
+        break;
+      default:
+        update = false;
+    }
+    
+    if (update) {
+      for (int i = 0; i < options.size(); ++i) {
+        mvwprintw(optionWin, i, 1, " ");
+        if (i == current)
+          mvwprintw(optionWin, i, 1, "*");
+      }
+      wrefresh(optionWin);
     }
   }
   endwin();

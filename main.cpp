@@ -90,6 +90,8 @@ int main() {
   
   //Testing curses
   //displayChatScreen();
+  std::vector<std::string> options = {"New chat", "Chats", "Change nickname", "Exit"};
+  //selector(options);
   
 
 
