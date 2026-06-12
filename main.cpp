@@ -37,12 +37,6 @@ void showPeers();
 
 std::vector<std::string> getMachineIPs();
 
-
-// Chat history using Msg structure from socket.hpp
-
-// Stores the messages which were sent and by whom it was sent
-// Currently 0 will be messages sent and 1 messages recieved
-
 std::mutex messageMutex;
 
 
@@ -63,6 +57,9 @@ int main() {
   //displayChatScreen();
   std::vector<std::string> options = {"New chat", "Chats", "Change nickname", "Exit"};
   //selector(options);
+  beginUI();
+  displayHomeScreen();
+  endUI();
   
 
 

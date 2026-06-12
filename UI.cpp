@@ -9,10 +9,24 @@ bool displayChat = true;
 bool isInputReady = false;
 std::vector<std::pair<int, Msg>> chatHistory;
 
+std::vector<std::string> homeScreenOptions = {"New Chat", "Chats", "Change Nickname", "Exit"};
+std::atomic<HOME_OPTIONS> selectedOption;
+
+
 void addMsg(Msg msg, int creator) {
   std::pair<int, Msg> temp = std::pair<int, Msg>(creator, msg);
   chatHistory.push_back(temp); //TODO maybe use emplace_back
   updateScreen = true;
+}
+
+void beginUI() {
+  initscr();
+  noecho();
+  halfdelay(1);
+}
+
+void endUI() {
+  endwin();
 }
 
 // Inspired from https://invisible-island.net/ncurses/NCURSES-Programming-HOWTO.html#INIT 
@@ -36,11 +50,6 @@ void displayChatLog(WINDOW* win) {
     }
   }
   wrefresh(win); // To display it into real terminal
-}
-
-// TODO move code from displayChatScreen here
-std::string getUserInput() {
-  return std::string("");
 }
 
 void displayChatScreen() {
@@ -109,45 +118,40 @@ void displayChatScreen() {
 }
 
 /* Displays option menu and returns the index of selected option */
-int selector(std::vector<std::string>& options) {
-  initscr();
+int selector(std::vector<std::string>& options, WINDOW* win) {
   noecho();
   cbreak(); // Immediately get key press
 
-  int rows, cols;
-  WINDOW* optionWin;
-  
-  getmaxyx(stdscr, rows, cols);
-
-  optionWin = newwin(options.size(), cols, 0, 0);
-  keypad(optionWin, true);
+  keypad(win, true);
   curs_set(0); // Sets cursor to be invisible
 
   int current = 0;
   for (int i = 0; i < options.size(); ++i) {
     if (i == current) {
-      wprintw(optionWin, "[*] %s\n", options[i].c_str());
+      wprintw(win, "[*] %s\n", options[i].c_str());
     } else
-      wprintw(optionWin, "[ ] %s\n", options[i].c_str());
+      wprintw(win, "[ ] %s\n", options[i].c_str());
   }
-  wrefresh(optionWin);
+  wrefresh(win);
   int ch;
   bool update = false;
   while (1) {
-    ch = wgetch(optionWin);
+    ch = wgetch(win);
     if (ch == 10) {
-      wclear(optionWin);
-      wrefresh(optionWin);
+      wclear(win);
+      wrefresh(win);
       return current;
     }
     update = true;
     switch (ch) {
+      case 'k':
       case KEY_UP:
         if (current == 0)
           current = options.size() - 1;
         else
           current--;
         break;
+      case 'j':
       case KEY_DOWN:
         if (current == options.size() - 1)
           current = 0;
@@ -160,13 +164,51 @@ int selector(std::vector<std::string>& options) {
     
     if (update) {
       for (int i = 0; i < options.size(); ++i) {
-        mvwprintw(optionWin, i, 1, " ");
+        mvwprintw(win, i, 1, " ");
         if (i == current)
-          mvwprintw(optionWin, i, 1, "*");
+          mvwprintw(win, i, 1, "*");
       }
-      wrefresh(optionWin);
+      wrefresh(win);
     }
   }
-  endwin();
 }
 
+void displayHomeScreen() {
+  // TODO make and display logo
+  clear();
+  int x, y;
+  int rows, cols;
+  
+  getmaxyx(stdscr, rows, cols);
+  getyx(stdscr, y, x);
+  // TODO use map of WINDOW* and std::string to store windows and just refresh them
+  WINDOW* homeWin;
+  WINDOW* optionWin;
+  
+  homeWin = newwin(rows, cols, 0, 0);
+  wprintw(homeWin, "====LAN-chat====\n");
+
+  optionWin = newwin(homeScreenOptions.size(), cols, y + 1, 0);
+  
+  refresh();
+  //wrefresh(homeWin);
+  //wrefresh(optionWin);
+  int userChoice = selector(homeScreenOptions, optionWin);
+
+  switch (userChoice) {
+    case 0: // New chat
+      selectedOption = NEW_CHAT;
+      break;
+    case 1: // Chats
+      selectedOption = CHATS;
+      break;
+    case 2: // Change nickname
+      selectedOption = CHANGE_NICKNAME;
+      break;
+    case 3: // Exit
+      selectedOption = EXIT;
+      break;
+    default: // How tf u managed to corrupt memory so bad to get new index?
+      break;
+  }
+}
