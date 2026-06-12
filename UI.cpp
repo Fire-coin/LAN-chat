@@ -2,14 +2,14 @@
 #include <curses.h>
 #include <stdlib.h>
 #include <cstring>
+#include <iostream>
 
-bool acceptInputToBuffer = true;
+
 std::string inputBuffer = "";
 bool updateScreen = false;
 bool displayChat = true;
 bool isInputReady = false;
 std::vector<std::pair<int, Msg>> chatHistory;
-
 
 
 // Inspired from https://invisible-island.net/ncurses/NCURSES-Programming-HOWTO.html#INIT 
@@ -60,7 +60,7 @@ void displayChatScreen() {
   char* separator = new char[cols];
   memset(separator, '-', cols);
   mvwprintw(inputWin, 0, 0, "%s", separator);
-  
+
   wrefresh(chatWin);
   wrefresh(inputWin);
 
@@ -68,17 +68,13 @@ void displayChatScreen() {
     if (updateScreen) {
       displayChatLog(chatWin);
       updateScreen = false;
-      //TODO REMOVE AFTER TEST
-      inputBuffer = "";
-      isInputReady = false;
     }
     
     ch = wgetch(inputWin);
     if (ch == ERR)
       continue;
-    
+
     // 127 is delete
-    // TODO handle delete separately
     if (ch >= ' ' && ch <= 127 && !isInputReady) {
       if (ch != 127) {
         inputBuffer.append(reinterpret_cast<char*>(&ch));
@@ -102,23 +98,42 @@ void displayChatScreen() {
       wclear(inputWin);
       mvwprintw(inputWin, 0, 0, "%s", separator);
       wrefresh(inputWin);
-      // TODO FOR TEST ONLY REMOVE LATER
-      Msg msg;
-      msg.filename = "";
-      msg.data = "";
-      if (inputBuffer.find("#file=") == inputBuffer.npos) { // Text message
-        msg.data = inputBuffer;
-      } else { // File
-        int index = inputBuffer.find("#file=");
-        std::string filename = std::string(inputBuffer.begin() + index + 7, inputBuffer.end()); // We add + 7 bytes to start from the filename
-        msg.filename = filename;
-      }
-      std::pair<int, Msg> sendMsg = std::pair<int, Msg>(0, msg);
-      chatHistory.push_back(sendMsg);
-      updateScreen = true;
     }
   }
   
   delete[] separator;
   endwin();
 }
+
+/* Displays option menu and returns the index of selected option */
+int selector(std::vector<std::string>& options) {
+  initscr();
+  int rows, cols;
+  WINDOW* optionWin;
+  
+  getmaxyx(stdscr, rows, cols);
+
+  optionWin = newwin(options.size(), cols, 0, 0);
+
+  int current = 0;
+  for (int i = 0; i < options.size(); ++i) {
+    if (i == current) {
+      wprintw(optionWin, "[*] %s", options[i].c_str());
+    } else
+      wprintw(optionWin, "[ ] %s", options[i].c_str());
+  }
+  int ch;
+  while (1) {
+    for (int i = 0; i < options.size(); ++i) {
+      mvwdelch(optionWin, i, 1);
+      if (i == current)
+        mvwprintw(optionWin, i, 1, "*");
+    }
+    ch = wgetch(optionWin);
+    if (ch == 10) {
+      return current;
+    }
+  }
+  endwin();
+}
+

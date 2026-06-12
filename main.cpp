@@ -76,7 +76,6 @@ void addMsg(Msg msg, int creator);
 
 
 int main() {
-  //std::cout << "Start of the Test\n";
   
   int choice;
   std::string buf; // Used to clear std::cin buffer
@@ -85,23 +84,12 @@ int main() {
   // Both added to supress compiler warnings
   std::future<void> _monitorRequest;
   std::future<void> _sendingRequest;
-  // std::vector<std::string> IPs = getMachineIPs();
-  // for (auto ip : IPs) 
-  //   std::cout << "IP found: " << ip << std::endl;
 
   // Currently doing test for UDP discovery
   std::future<void> _discoverRequest = std::async(std::launch::async, [discoveryPortNum]() { discoverPeers(discoveryPortNum); });
-  // int i = 0;
-  // while (true) {
-  //   //system("clear");
-  //   std::cout << "Iteration: " << i++ << std::endl;
-  //   showPeers();
-  //   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-  // }
   
   //Testing curses
-  //testInputAndOutput();
-  displayChatScreen();
+  //displayChatScreen();
   
 
 
@@ -115,7 +103,6 @@ int main() {
   while (doListening && !isConnected) {
     std::cout << "Start connection(0 / 1): ";
     std::cin >> choice;
-    // std::getline(std::cin, buf);
     
     if (!isConnected && choice == 1) {
       std::cout << "Available devices: \n";
@@ -129,7 +116,6 @@ int main() {
     else if (choice == 0 && !isConnected) {
       std::cout << "Exit app (1 / 0)?: ";
       std::cin >> choice;
-      // std::getline(std::cin, buf);
     
       if (choice == 1)
         exit(0);
@@ -260,83 +246,62 @@ void establishConnection(ConnectionSock& conSock) {
   std::cout << "Establish connection 2\n";
   if (!conSock.exists())
     error("Error while creating connection socket");
-  initscr();
+
+  displayChat = true;
+  //TODO make this into thread later
+  // Starting chat UI
+  std::future<void> displayResponce = std::async(std::launch::async, []() { displayChatScreen(); });
   isConnected = true;
   doConnection = false;
 
   bool isRequestSending = false;
   bool isRequestRecieving = false;
-  bool isTakingInput = false;
   std::future<bool> sendResponce;
   std::future<int> recieveResponce;
-  std::future<std::string> inputResponce;
-  int useFile = 0;
   Msg sendMsg, recvMsg;
-  std::string recievedData, sendData;
+  std::string recievedData, sendData, filename;
 
-  //std::getline(std::cin, sendMsg); // Clear the buffer
   // TODO add condition which will be possible to terminate from other thread
   while (sendData != "exit" && conSock.exists() && recievedData != "exit") {
-    // Start taking input
-    if (!isTakingInput) {
-      isTakingInput = true;
-      inputResponce = std::async(std::launch::async, []() { return getUserInput(); });
-    }
 
-    auto inputStatus = inputResponce.wait_for(std::chrono::milliseconds(0));
-    if (inputStatus == std::future_status::ready) {
-      printw("Success to get string");
+    if (isInputReady) {
       // Start with a new request to send when there is none currently
       if (!isRequestSending) {
         isRequestSending = true;
-        isTakingInput = false;
-        std::string sendData = inputResponce.get();
-        std::string filename;
+        sendData = inputBuffer;
         sendMsg.filename = "";
         sendMsg.data = "";
-        // Process input, check if user sent file or text message
-        if (sendData.find_first_of("$file=") == sendData.npos) { // Text message
+        if (sendData.find("$file=") == sendData.npos) { // Text message
           sendMsg.data = sendData;
           sendResponce = std::async(std::launch::async, [&conSock, sendData]() { return sendMessage(conSock, sendData); });
         } else { // File
-          int index = sendData.find_first_of("$file=");
-          filename = std::string(sendData.begin() + index + 7, sendData.end()); // We add + 7 bytes to start from the filename
+          int index = sendData.find("$file=");
+          // TODO make filename structure be $file={<filename>}
+          std::string filename = std::string(sendData.begin() + index + 6, sendData.end()); // We add + 6 bytes to start from the filename
           sendMsg.filename = filename;
           sendResponce = std::async(std::launch::async, [&conSock, filename]() { return sendFile(conSock, filename); });
         }
-        addMsg(sendMsg, 0); // Creator = 0 because data is being sent
-
-        
-
-
-        //std::cout << "Do you want to send file?(no=0)(yes=1): ";
-        //std::cin >> useFile ;
-        //std::getline(std::cin, filepath); // Clearing the buffer
-        //
-        //if (useFile == 1) {
-        //  std::cout << "Enter filapath: ";
-        //  std::getline(std::cin, filepath);
-        //  sendMsg = "";
-        //  sendResponce = std::async(std::launch::async, [&conSock, filepath]() { return sendFile(conSock, filepath); });
-        //} else if (useFile == 0) {
-        //  std::cout << "Enter message to send to other device: ";
-        //  std::getline(std::cin, sendMsg);
-        //  filepath = "";
-        //  sendResponce = std::async(std::launch::async, [&conSock, sendMsg]() { return sendMessage(conSock, sendMsg); });
-        //}
+        inputBuffer = "";
+        isInputReady = false;
       }
     }
-    // TODO add some way to separate streams when recieving and sending data
-    auto sendStatus = sendResponce.wait_for(std::chrono::milliseconds(0));
-    if (sendStatus == std::future_status::ready) {
-      bool sendSuccess = sendResponce.get();
-      if (!sendSuccess) {
-        // TODO handle error
+
+    if (sendResponce.valid()) {
+      auto sendStatus = sendResponce.wait_for(std::chrono::milliseconds(0));
+      if (sendStatus == std::future_status::ready) {
+        bool sendSuccess = sendResponce.get();
+        if (!sendSuccess) {
+          // TODO handle error
+          sendMsg.data = "There was error sending your message.";
+          sendMsg.filename = "";
+          addMsg(sendMsg, 0); // TODO add another creator for system errors and messages
+        } else {
+          addMsg(sendMsg, 0); // The message was sent by this machine thats why second param is 0
+        }
+        isRequestSending = false;
       }
-      addMsg(sendMsg, 0); // The message was sent by this machine thats why second param is 0
-      //displayChatLog(chatHistory);
-      isRequestSending = false;
     }
+
     // Start new recieving request only if none is currently pending 
     if (!isRequestRecieving) {
       isRequestRecieving = true;
@@ -345,28 +310,25 @@ void establishConnection(ConnectionSock& conSock) {
       recieveResponce = std::async(std::launch::async, [&conSock, &recievedData]() { return recieve(conSock, recievedData); });
     }
     
-    auto recieveStatus = recieveResponce.wait_for(std::chrono::milliseconds(0));
+    if (recieveResponce.valid()) {
+      auto recieveStatus = recieveResponce.wait_for(std::chrono::milliseconds(0));
 
-    if (recieveStatus == std::future_status::ready) {
-      int n = recieveResponce.get(); 
+      if (recieveStatus == std::future_status::ready) {
+        int n = recieveResponce.get(); 
 
-      if (n == 1 || n == 3) // Some error
-        continue; // Handle them later
-      if (n == 2 || n == 4) {
-        Msg msg;
-        // TODO make messages be possible to send both text and file
-        if (n == 2)  {
-          msg.data = recievedData;
-          addMsg(msg, 1); // Data recieved so creator = 1
-          //std::cout << "Recieved message: " << recvMsg << std::endl;
+        if (n == 1 || n == 3) // Some error
+          continue; // Handle them later
+        if (n == 2 || n == 4) {
+          // TODO make messages be possible to send both text and file
+          if (n == 2)  {
+            recvMsg.data = recievedData;
+            addMsg(recvMsg, 1); // Data recieved so creator = 1
+          }
+          if (n == 4) {
+            recvMsg.filename = recievedData;
+            addMsg(recvMsg, 1); // Data recievec so creator = 1
+          }
         }
-        if (n == 4) {
-          msg.filename = recievedData;
-          addMsg(msg, 1); // Data recievec so creator = 1
-          //std::cout << "File recieved: " << recvMsg << std::endl;
-        }
-        //displayChatLog(chatHistory);
-
         isRequestRecieving = false;
       }
     }
@@ -375,7 +337,6 @@ void establishConnection(ConnectionSock& conSock) {
   doConnection = true;
   acceptConnection = true;
   conSock.close();
-  endwin();
 }
 
 // TODO convert IPOrHost with inet_pton into binary value
@@ -511,10 +472,8 @@ std::vector<std::string> getMachineIPs() {
 
 
 void addMsg(Msg msg, int creator) {
-  messageMutex.lock();
-
+  std::cout << "addMsg called\n";
   std::pair<int, Msg> temp = std::pair<int, Msg>(creator, msg);
   chatHistory.push_back(temp);
-
-  messageMutex.unlock();
+  updateScreen = true;
 }

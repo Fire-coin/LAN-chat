@@ -8,7 +8,6 @@
 
 
 extern std::string inputBuffer;
-extern bool acceptInputToBuffer;
 extern bool updateScreen;
 extern bool displayChat;
 extern bool isInputReady;
