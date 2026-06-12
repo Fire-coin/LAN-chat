@@ -199,7 +199,7 @@ int ConnectionSock::sendFile(std::fstream& file, std::string& filename) {
   
   // Get length of filename
   uint16_t filenameLength = filename.size();
-  std::cout << "Sending filename length of: " << filenameLength << " and filename is: " << filename << std::endl;
+  //std::cout << "Sending filename length of: " << filenameLength << " and filename is: " << filename << std::endl;
   // Create buffer for data and read data into it
   std::vector<char> dataBuffer(fileLength);
   file.read(dataBuffer.data(), fileLength);
@@ -217,7 +217,7 @@ int ConnectionSock::sendFile(std::fstream& file, std::string& filename) {
 int ConnectionSock::send(std::string msg) {
   std::string message;
   uint64_t msgSize = msg.size();
-  std::cout << msgSize << std::endl;
+  //std::cout << msgSize << std::endl;
   std::string filename = "";
   uint16_t filenameLength = 0;
   

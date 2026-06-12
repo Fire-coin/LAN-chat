@@ -13,6 +13,8 @@ extern bool displayChat;
 extern bool isInputReady;
 extern std::vector<std::pair<int, Msg>> chatHistory;
 
+void addMsg(Msg msg, int creator);
+
 void displayChatLog(std::vector<std::pair<int, Msg>>& chatLog);
 std::string getUserInput();
 void displayChatScreen();

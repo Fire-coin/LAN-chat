@@ -1,8 +1,6 @@
 #include "UI.hpp"
 #include <curses.h>
-#include <stdlib.h>
-#include <cstring>
-#include <iostream>
+#include <cstring> // memset
 
 
 std::string inputBuffer = "";
@@ -11,6 +9,11 @@ bool displayChat = true;
 bool isInputReady = false;
 std::vector<std::pair<int, Msg>> chatHistory;
 
+void addMsg(Msg msg, int creator) {
+  std::pair<int, Msg> temp = std::pair<int, Msg>(creator, msg);
+  chatHistory.push_back(temp); //TODO maybe use emplace_back
+  updateScreen = true;
+}
 
 // Inspired from https://invisible-island.net/ncurses/NCURSES-Programming-HOWTO.html#INIT 
 void displayChatLog(WINDOW* win) {
