@@ -20,7 +20,6 @@ void error(const char* msg) {
 int main() {
   
   int choice;
-  std::string buf; // Used to clear std::cin buffer
   int portNum = 55555;
   int discoveryPortNum = 5000;
   // Both added to supress compiler warnings
@@ -30,11 +29,8 @@ int main() {
   // Currently doing test for UDP discovery
   std::future<void> _discoverRequest = std::async(std::launch::async, [discoveryPortNum]() { discoverPeers(discoveryPortNum); });
   
-  //Testing curses
-  //displayChatScreen();
-  //selector(options);
+  std::vector<Peer> connectedIPs; // TODO remove IPs from currentPeers which are in here in function
   std::string selectedIP;
-  //nickname = "This is test";
   std::string nick;
   bool showUI = true;
   beginUI();
@@ -43,6 +39,9 @@ int main() {
     switch (selectedOption) {
       case NEW_CHAT:
         selectedIP = displayNewChatScreen();
+        break;
+      case CHATS:
+        displayChatsScreen(connectedIPs);
         break;
       case CHANGE_NICKNAME:
         nick = displayChangeNicknameScreen(nickname);

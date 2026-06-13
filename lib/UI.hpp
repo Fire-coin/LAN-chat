@@ -2,6 +2,7 @@
 #define UI_HPP
 
 #include "socket.hpp" // For Msg struct
+#include "peer.hpp" // For Peer struct
 #include <vector> // std::vector
 #include <utility> // std::pair
 #include <string> // std::string
@@ -33,6 +34,7 @@ int selector(std::vector<std::string>& options, WINDOW* win);
 void displayHomeScreen();
 std::string displayNewChatScreen();
 std::string displayChangeNicknameScreen(std::string curNick);
+std::string displayChatsScreen(std::vector<Peer>& connectedPeers);
 
 
 

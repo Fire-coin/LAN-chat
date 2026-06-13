@@ -1,6 +1,6 @@
 #include "UI.hpp"
 #include "peer.hpp"
-#include <curses.h>
+#include <ncurses.h>
 #include <cstring> // memset
 #include <assert.h>
 
@@ -57,7 +57,6 @@ void displayChatLog(WINDOW* win) {
 }
 
 void displayChatScreen() {
-  initscr();
   noecho();
   halfdelay(2); // Check for request every 200 milliseconds that user does not type
   WINDOW* chatWin;
@@ -436,4 +435,32 @@ std::string displayChangeNicknameScreen(std::string curNick) {
         return "~|NO_change|~";
     }
   }
+}
+
+
+std::string displayChatsScreen(std::vector<Peer>& connectedPeers) {
+  clear();
+  std::vector<std::string> options;
+  
+  std::string entry;
+  for (auto p : connectedPeers) {
+    entry.clear();
+    entry.append(p.nickname);
+    entry.append(" | ");
+    entry.append(p.IP);
+    options.push_back(entry);
+  }
+
+  WINDOW* win;
+  WINDOW* selectorWin;
+
+  wprintw(win, "Select a chat to enter\n");
+  wprintw(win, "nickname   | IP\n");
+  
+  win = newwin(ROWS, COLS, 0, 0);
+  wrefresh(win);
+  selectorWin = newwin(options.size(), COLS, 2, 0);
+  int opt = selector(options, selectorWin);
+
+  return connectedPeers[opt].IP;
 }
