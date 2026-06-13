@@ -10,6 +10,8 @@
 
 enum HOME_OPTIONS {NEW_CHAT, CHATS, CHANGE_NICKNAME, EXIT};
 
+extern int ROWS, COLS;
+
 extern std::string inputBuffer;
 extern bool updateScreen;
 extern bool displayChat;
@@ -18,6 +20,7 @@ extern std::vector<std::pair<int, Msg>> chatHistory;
 
 extern std::vector<std::string> homeScreenOptions;
 extern std::atomic<HOME_OPTIONS> selectedOption;
+
 
 void addMsg(Msg msg, int creator);
 
@@ -28,6 +31,7 @@ void displayChatLog(WINDOW* win);
 void displayChatScreen();
 int selector(std::vector<std::string>& options, WINDOW* win);
 void displayHomeScreen();
+std::string displayNewChatScreen();
 
 
 

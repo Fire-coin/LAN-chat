@@ -1,7 +1,10 @@
 #include "UI.hpp"
+#include "peer.hpp"
 #include <curses.h>
 #include <cstring> // memset
+#include <assert.h>
 
+int ROWS, COLS;
 
 std::string inputBuffer = "";
 bool updateScreen = false;
@@ -23,6 +26,7 @@ void beginUI() {
   initscr();
   noecho();
   halfdelay(1);
+  getmaxyx(stdscr, ROWS, COLS);
 }
 
 void endUI() {
@@ -58,19 +62,18 @@ void displayChatScreen() {
   halfdelay(2); // Check for request every 200 milliseconds that user does not type
   WINDOW* chatWin;
   WINDOW* inputWin;
-  int rows, cols, ch;
+  int ch;
 
-  getmaxyx(stdscr, rows, cols);
 
-  chatWin = newwin(rows - 3, cols, 0, 0);
-  inputWin = newwin(3, cols, rows - 3, 0);
+  chatWin = newwin(ROWS - 3, COLS, 0, 0);
+  inputWin = newwin(3, COLS, ROWS - 3, 0);
   
   wclear(chatWin);
   wclear(inputWin);
 
   // Display a bar separating chat and input windows
-  char* separator = new char[cols];
-  memset(separator, '-', cols);
+  char* separator = new char[COLS];
+  memset(separator, '-', COLS);
   mvwprintw(inputWin, 0, 0, "%s", separator);
 
   wrefresh(chatWin);
@@ -177,21 +180,19 @@ void displayHomeScreen() {
   // TODO make and display logo
   clear();
   int x, y;
-  int rows, cols;
   
-  getmaxyx(stdscr, rows, cols);
   getyx(stdscr, y, x);
   // TODO use map of WINDOW* and std::string to store windows and just refresh them
   WINDOW* homeWin;
   WINDOW* optionWin;
   
-  homeWin = newwin(rows, cols, 0, 0);
+  homeWin = newwin(ROWS, COLS, 0, 0);
   wprintw(homeWin, "====LAN-chat====\n");
 
-  optionWin = newwin(homeScreenOptions.size(), cols, y + 1, 0);
+  optionWin = newwin(homeScreenOptions.size(), COLS, y + 1, 0);
   
   refresh();
-  //wrefresh(homeWin);
+  wrefresh(homeWin);
   //wrefresh(optionWin);
   int userChoice = selector(homeScreenOptions, optionWin);
 
@@ -210,5 +211,99 @@ void displayHomeScreen() {
       break;
     default: // How tf u managed to corrupt memory so bad to get new index?
       break;
+  }
+}
+
+std::string displayNewChatScreen() {
+  clear();
+  WINDOW* win;
+  WINDOW* optionWin;
+  win = newwin(ROWS, COLS, 0, 0);
+  optionWin = newwin(ROWS - 2, COLS, 2, 0);
+
+  // TODO make better header
+  wprintw(win, "====SELECT PEER TO CONNECT====\n");
+  wprintw(win, "        IP          |    nickname\n");
+  
+  keypad(win, true);
+  curs_set(0); // Sets cursor to be invisible
+  halfdelay(1);
+
+  discoverMutex.lock();
+  int lastSize = currentPeers.size();
+
+
+  int current = 0;
+  for (int i = 0; i < currentPeers.size(); ++i) {
+    if (i == current) {
+      wprintw(optionWin, "[*] %s|%s\n", currentPeers[i].IP.c_str(), currentPeers[i].nickname.c_str());
+    } else
+      wprintw(optionWin, "[ ] %s|%s\n", currentPeers[i].IP.c_str(), currentPeers[i].nickname.c_str());
+  }
+  discoverMutex.unlock();
+  wrefresh(win);
+  int ch;
+  bool update = false;
+  // TODO add option for Esc key
+  while (1) {
+    ch = wgetch(optionWin);
+
+    if (ch == 10) {
+      discoverMutex.lock();
+      assert(current < currentPeers.size());
+      std::string out = currentPeers.size() > 0 ? currentPeers[current].IP : "";
+      discoverMutex.unlock();
+
+      wclear(optionWin);
+      wrefresh(optionWin);
+      return out;
+    }
+    update = true;
+    switch (ch) {
+      case 'k':
+      case KEY_UP:
+        if (current == 0)
+          current = currentPeers.size() > 0 ? currentPeers.size() - 1 : 0;
+        else
+          current--;
+        break;
+      case 'j':
+      case KEY_DOWN:
+        if (currentPeers.size() < 1)
+          current = 0;
+        if (current == currentPeers.size() - 1)
+          current = 0;
+        else
+          current++;
+        break;
+      default:
+        update = false;
+    }
+    
+    if (update) {
+      for (int i = 0; i < currentPeers.size(); ++i) {
+        mvwprintw(optionWin, i, 1, " ");
+        if (i == current)
+          mvwprintw(optionWin, i, 1, "*");
+      }
+      wrefresh(optionWin);
+    }
+    discoverMutex.lock();
+    if (currentPeers.size() != lastSize) {
+      if (lastSize > currentPeers.size()) // If list got smaller and selected was last option, place selected at the new last option
+        current = currentPeers.size() - 1;
+      lastSize = currentPeers.size();
+      wclear(optionWin);
+      wmove(optionWin, 0, 0);
+      
+      for (int i = 0; i < currentPeers.size(); ++i) {
+        if (i == current) {
+          wprintw(optionWin, "[*] %s|%s\n", currentPeers[i].IP.c_str(), currentPeers[i].nickname.c_str());
+        } else
+          wprintw(optionWin, "[ ] %s|%s\n", currentPeers[i].IP.c_str(), currentPeers[i].nickname.c_str());
+      }
+      wrefresh(optionWin);
+    }
+    discoverMutex.unlock();
   }
 }
