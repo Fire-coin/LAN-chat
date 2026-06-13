@@ -34,11 +34,32 @@ int main() {
   //displayChatScreen();
   //selector(options);
   std::string selectedIP;
-
+  //nickname = "This is test";
+  std::string nick;
+  bool showUI = true;
   beginUI();
-  displayHomeScreen();
-  if (selectedOption == NEW_CHAT)
-    selectedIP = displayNewChatScreen();
+  while (showUI) {
+    displayHomeScreen();
+    switch (selectedOption) {
+      case NEW_CHAT:
+        selectedIP = displayNewChatScreen();
+        break;
+      case CHANGE_NICKNAME:
+        nick = displayChangeNicknameScreen(nickname);
+        if (nick == "~|NO_change|~")
+          break;
+        nickMutex.lock();
+        if (nick != nickname) {
+          nickname = nick;
+          changeNickname = true;
+        }
+        nickMutex.unlock();
+        break;
+      case EXIT:
+        showUI = false;
+        break;
+    }
+  }
   endUI();
   
 

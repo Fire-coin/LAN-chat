@@ -32,6 +32,7 @@ void displayChatScreen();
 int selector(std::vector<std::string>& options, WINDOW* win);
 void displayHomeScreen();
 std::string displayNewChatScreen();
+std::string displayChangeNicknameScreen(std::string curNick);
 
 
 

@@ -247,10 +247,10 @@ std::string displayNewChatScreen() {
   // TODO add option for Esc key
   while (1) {
     ch = wgetch(optionWin);
-
+    if (ch == 27) // Escape
+      return "";
     if (ch == 10) {
       discoverMutex.lock();
-      assert(current < currentPeers.size());
       std::string out = currentPeers.size() > 0 ? currentPeers[current].IP : "";
       discoverMutex.unlock();
 
@@ -305,5 +305,135 @@ std::string displayNewChatScreen() {
       wrefresh(optionWin);
     }
     discoverMutex.unlock();
+  }
+}
+
+bool displayConfirmWin(std::string question) {
+  WINDOW* win;
+  int height = 8, width = COLS / 3;
+  int startX, startY;
+  startY = (ROWS - height) / 2;
+  startX = (COLS - width) / 2;
+  win = newwin(height, width, startY, startX);
+  box(win, 0, 0);
+  // TODO center text
+  mvwprintw(win, 1, 1, "%s", question.c_str());
+
+  WINDOW* yes;
+  WINDOW* no;
+  yes = newwin(3, 5, startY + height - 4, startX + 1);
+  no = newwin(3, 4, startY + height - 4, startX + width - 5);
+
+  box(yes, 0, 0);
+  box(no, 0, 0);
+
+  wattron(yes, A_REVERSE);
+  mvwprintw(yes, 1, 1, "Yes");
+  wattroff(yes, A_REVERSE);
+  mvwprintw(no, 1, 1, "No");
+
+  wrefresh(win);
+  wrefresh(yes);
+  wrefresh(no);
+  refresh();
+
+  int ch;
+  halfdelay(1);
+  keypad(win, true);
+  
+  bool current = true; // For yes option
+
+  
+  while (1) {
+    ch = wgetch(win);
+
+    switch (ch) {
+      case 'l':
+      case 'h':
+      case KEY_RIGHT:
+      case KEY_LEFT:
+        if (current) {
+          mvwprintw(yes, 1, 1, "Yes");
+          wattron(no, A_REVERSE);
+          mvwprintw(no, 1, 1, "No");
+          wattroff(no, A_REVERSE);
+        } else {
+          mvwprintw(no, 1, 1, "No");
+          wattron(yes, A_REVERSE);
+          mvwprintw(yes, 1, 1, "Yes");
+          wattroff(yes, A_REVERSE);
+        }
+        wrefresh(no);
+        wrefresh(yes);
+
+        current = !current;
+        break;
+      case '\n':
+        return current;
+    }
+  }
+}
+
+std::string displayChangeNicknameScreen(std::string curNick) {
+  clear();
+  WINDOW* textWin;
+  WINDOW* nickWin;
+
+  // Center nickname window
+  int length = 32;
+  int avgX, avgY, startX, startY;
+  avgX = COLS / 2;
+  
+  startX = avgX - (length + 1) / 2; // 1 for border
+  
+  nickWin = newwin(3, length + 2, 1, startX);
+  box(nickWin, 0, 0);
+  
+  textWin = newwin(1, length + 2, 0, startX);
+  wprintw(textWin, "Your nickname\n");
+
+  // Putting current nickname into input window
+  mvwprintw(nickWin, 1, 1, "%s", curNick.c_str());
+
+  refresh();
+  wrefresh(nickWin);
+  wrefresh(textWin);
+
+  halfdelay(1);
+  int ch;
+  while (1) {
+    ch = wgetch(nickWin);
+    
+    if (ch == ERR)
+      continue;
+
+    // 127 is delete
+    if (ch >= ' ' && ch <= 127 && !isInputReady) {
+      int x, y;
+      getyx(nickWin, y, x);
+      if (ch != 127 && x < length) {
+        curNick.append(reinterpret_cast<char*>(&ch));
+        waddch(nickWin, ch);
+        wrefresh(nickWin);
+      } else {
+        if (x == 1)
+          continue;
+        curNick.erase(curNick.size() - 1, 1); // Erase last character from buffer
+        wmove(nickWin, y, x - 1);
+        waddch(nickWin, ' ');
+        wmove(nickWin, y, x - 1);
+        wrefresh(nickWin);
+      }
+    }
+
+    if (ch == 10)
+      return curNick;
+    if (ch == 27) { // Escape
+      bool responce = displayConfirmWin("Do you want to save changes?");
+      if (responce)
+        return curNick;
+      else
+        return "~|NO_change|~";
+    }
   }
 }

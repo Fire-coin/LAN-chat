@@ -11,6 +11,10 @@
 
 std::vector<Peer> currentPeers;
 
+std::atomic<bool> changeNickname = false;
+std::string nickname = "";
+std::mutex nickMutex;
+
 std::mutex discoverMutex; // Used when manipulating with currentPeers
 
 
@@ -35,6 +39,12 @@ void discoverPeers(int portNum) {
   std::string nickname, IP; 
 
   while (doPeerDiscovery) {
+    if (changeNickname) {
+      nickMutex.lock();
+      uSock.changeNickname(nickname);
+      nickMutex.unlock();
+    }
+
     if (!isSendingPacket) {
       isSendingPacket = true;
       packetSendError = std::async(std::launch::async, [sendDelay, &uSock]() { return uSock.sendPresence(sendDelay); });
