@@ -9,7 +9,7 @@
 #include <curses.h> // for WINDOW
 #include <atomic> // for std::atomic
 
-enum HOME_OPTIONS {NEW_CHAT, CHATS, CHANGE_NICKNAME, EXIT};
+enum HOME_OPTIONS {NEW_CHAT, CHATS, CHANGE_NICKNAME, EXIT, NO_OPTION};
 
 extern int ROWS, COLS;
 
@@ -20,8 +20,6 @@ extern bool isInputReady;
 extern std::vector<std::pair<int, Msg>> chatHistory;
 
 extern std::vector<std::string> homeScreenOptions;
-extern std::atomic<HOME_OPTIONS> selectedOption;
-
 
 void addMsg(Msg msg, int creator);
 
@@ -31,7 +29,7 @@ void endUI();
 void displayChatLog(WINDOW* win);
 void displayChatScreen();
 int selector(std::vector<std::string>& options, WINDOW* win);
-void displayHomeScreen();
+HOME_OPTIONS displayHomeScreen();
 std::string displayNewChatScreen();
 std::string displayChangeNicknameScreen(std::string curNick);
 std::string displayChatsScreen(std::vector<Peer>& connectedPeers);

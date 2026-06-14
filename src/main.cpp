@@ -32,10 +32,11 @@ int main() {
   std::vector<Peer> connectedIPs; // TODO remove IPs from currentPeers which are in here in function
   std::string selectedIP;
   std::string nick;
+  HOME_OPTIONS selectedOption;
   bool showUI = true;
   beginUI();
   while (showUI) {
-    displayHomeScreen();
+    selectedOption = displayHomeScreen();
     switch (selectedOption) {
       case NEW_CHAT:
         selectedIP = displayNewChatScreen();

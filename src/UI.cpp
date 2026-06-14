@@ -139,11 +139,7 @@ int selector(std::vector<std::string>& options, WINDOW* win) {
   bool update = false;
   while (1) {
     ch = wgetch(win);
-    if (ch == 10) {
-      wclear(win);
-      wrefresh(win);
-      return current;
-    }
+    
     update = true;
     switch (ch) {
       case 'k':
@@ -160,6 +156,14 @@ int selector(std::vector<std::string>& options, WINDOW* win) {
         else
           current++;
         break;
+      case 10: // Enter key
+        wclear(win);
+        wrefresh(win);
+        return current;
+      case 27: // Escape
+        wclear(win);
+        wrefresh(win);
+        return -1;
       default:
         update = false;
     }
@@ -175,7 +179,7 @@ int selector(std::vector<std::string>& options, WINDOW* win) {
   }
 }
 
-void displayHomeScreen() {
+HOME_OPTIONS displayHomeScreen() {
   // TODO make and display logo
   clear();
   int x, y;
@@ -196,20 +200,18 @@ void displayHomeScreen() {
   int userChoice = selector(homeScreenOptions, optionWin);
 
   switch (userChoice) {
+    case -1:
+      return NO_OPTION;
     case 0: // New chat
-      selectedOption = NEW_CHAT;
-      break;
+      return NEW_CHAT;
     case 1: // Chats
-      selectedOption = CHATS;
-      break;
+      return CHATS;
     case 2: // Change nickname
-      selectedOption = CHANGE_NICKNAME;
-      break;
+      return CHANGE_NICKNAME;
     case 3: // Exit
-      selectedOption = EXIT;
-      break;
+      return EXIT;
     default: // How tf u managed to corrupt memory so bad to get new index?
-      break;
+      return NO_OPTION;
   }
 }
 
@@ -466,6 +468,9 @@ std::string displayChatsScreen(std::vector<Peer>& connectedPeers) {
     wrefresh(selectorWin);
   }
   int opt = selector(options, selectorWin);
+
+  if (opt == -1)
+    return "";
 
   return connectedPeers[opt].IP;
 }
