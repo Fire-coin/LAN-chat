@@ -1,5 +1,6 @@
 #include "UI.hpp"
 #include "peer.hpp"
+#include "formatString.hpp"
 #include <ncurses.h>
 #include <cstring> // memset
 #include <assert.h>
@@ -245,7 +246,6 @@ std::string displayNewChatScreen() {
   wrefresh(win);
   int ch;
   bool update = false;
-  // TODO add option for Esc key
   while (1) {
     ch = wgetch(optionWin);
     if (ch == 27) // Escape
@@ -317,8 +317,8 @@ bool displayConfirmWin(std::string question) {
   startX = (COLS - width) / 2;
   win = newwin(height, width, startY, startX);
   box(win, 0, 0);
-  // TODO center text
-  mvwprintw(win, 1, 1, "%s", question.c_str());
+
+  mvwprintw(win, 1, 1, "%s", format(question, width - 2, '^').c_str());
 
   WINDOW* yes;
   WINDOW* no;
