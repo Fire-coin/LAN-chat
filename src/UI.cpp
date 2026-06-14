@@ -454,12 +454,17 @@ std::string displayChatsScreen(std::vector<Peer>& connectedPeers) {
   WINDOW* win;
   WINDOW* selectorWin;
 
+  win = newwin(ROWS, COLS, 0, 0);
+
   wprintw(win, "Select a chat to enter\n");
   wprintw(win, "nickname   | IP\n");
   
-  win = newwin(ROWS, COLS, 0, 0);
   wrefresh(win);
   selectorWin = newwin(options.size(), COLS, 2, 0);
+  if (options.size() == 0) {
+    wprintw(selectorWin, "No peers connected\n");
+    wrefresh(selectorWin);
+  }
   int opt = selector(options, selectorWin);
 
   return connectedPeers[opt].IP;
