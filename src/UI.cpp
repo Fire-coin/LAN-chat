@@ -3,7 +3,7 @@
 #include "formatString.hpp"
 #include <ncurses.h>
 #include <cstring> // memset
-#include <assert.h>
+#include <algorithm>
 
 int ROWS, COLS;
 
@@ -197,7 +197,6 @@ HOME_OPTIONS displayHomeScreen() {
   
   refresh();
   wrefresh(homeWin);
-  //wrefresh(optionWin);
   int userChoice = selector(homeScreenOptions, optionWin);
 
   switch (userChoice) {
@@ -237,10 +236,14 @@ std::string displayNewChatScreen() {
 
   int current = 0;
   for (int i = 0; i < currentPeers.size(); ++i) {
+    // Not showing IP with which the connection is already established
+    // TODO implement a mutex
+    if (std::find_if(connectedIPs.begin(), connectedIPs.end(), [i](Peer p) {return p.IP == currentPeers[i].IP;}) != connectedIPs.end())
+        continue;
     if (i == current) {
-      wprintw(optionWin, "[*] %s|%s\n", currentPeers[i].IP.c_str(), currentPeers[i].nickname.c_str());
+      wprintw(optionWin, "[*] %s|%s\n", format(currentPeers[i].IP, 3 * 4 + 3, '<').c_str(), currentPeers[i].nickname.c_str());
     } else
-      wprintw(optionWin, "[ ] %s|%s\n", currentPeers[i].IP.c_str(), currentPeers[i].nickname.c_str());
+      wprintw(optionWin, "[ ] %s|%s\n", format(currentPeers[i].IP, 3 * 4 + 3, '<').c_str(), currentPeers[i].nickname.c_str());
   }
   discoverMutex.unlock();
   wrefresh(win);

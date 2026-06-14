@@ -18,6 +18,7 @@ extern std::vector<Peer> currentPeers;
 extern std::atomic<bool> changeNickname;
 extern std::string nickname;
 extern std::mutex nickMutex;
+extern std::vector<Peer> connectedIPs;
 
 extern std::mutex discoverMutex;
 

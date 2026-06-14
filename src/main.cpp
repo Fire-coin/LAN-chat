@@ -27,9 +27,9 @@ int main() {
   std::future<void> _sendingRequest;
 
   // Currently doing test for UDP discovery
+  // TODO run this rather on a thread to be able to cancel it
   std::future<void> _discoverRequest = std::async(std::launch::async, [discoveryPortNum]() { discoverPeers(discoveryPortNum); });
   
-  std::vector<Peer> connectedIPs; // TODO remove IPs from currentPeers which are in here in function
   std::string selectedIP;
   std::string nick;
   HOME_OPTIONS selectedOption;
