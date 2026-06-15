@@ -56,7 +56,7 @@ int UDPDiscoverySock::sendPresence(int delay) {
   // Message will be in form LAN-chat|<nickname>|<portNum>
   // where <nickname> means value of nickname
   message.append("LAN-chat|");
-  message.append((nickname == "") ? "unknown" : nickname);
+  message.append((this->nickname == "") ? "unknown" : this->nickname);
   message.append("|");
   message.append(std::to_string(this->portNum));
 

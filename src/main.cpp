@@ -47,10 +47,11 @@ int main() {
         displayChatScreen(selectedIP);
         break;
       case CHATS: // TODO add mutex for connectedPeers
-        // Populate vector for test case
-        connectedPeers.emplace_back("198.168.10.12", "random guy");
-        connectedPeers.emplace_back("198.168.10.54", "Ibuprofen");
         selectedIP = displayChatsScreen(connectedPeers);
+          
+        if (selectedIP == "")
+          break;
+        displayChatScreen(selectedIP);
         break;
       case CHANGE_NICKNAME:
         nick = displayChangeNicknameScreen(nickname);

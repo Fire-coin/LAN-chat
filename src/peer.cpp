@@ -44,6 +44,7 @@ void discoverPeers(int portNum) {
       nickMutex.lock();
       uSock.changeNickname(nickname);
       nickMutex.unlock();
+      changeNickname = false;
     }
 
     if (!isSendingPacket) {

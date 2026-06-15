@@ -49,8 +49,7 @@ void displayChatLog(WINDOW* win, std::string IP) {
     }
     else {
       if (p.second.filename == "")
-        //mvwprintw(win, y + 1, 0, "Message recieved: %s\n", p.second.data.c_str());
-        mvwprintw(win, y + 1, 0, "Message recieved: %s\n", std::to_string(chatHistory[IP].size()).c_str());
+        mvwprintw(win, y + 1, 0, "Message recieved: %s\n", p.second.data.c_str());
       else
         mvwprintw(win, y + 1, 0, "File recieved: %s\n", p.second.filename.c_str());
     }
@@ -78,6 +77,11 @@ void displayChatScreen(std::string IP) {
   mvwprintw(inputWin, 0, 0, "%s", separator);
 
   wrefresh(chatWin);
+  wrefresh(inputWin);
+
+  displayChat = true;
+  updateScreen = true;
+  wprintw(inputWin, "%s", inputBuffer.c_str());
   wrefresh(inputWin);
 
   while (displayChat) {
@@ -114,6 +118,11 @@ void displayChatScreen(std::string IP) {
       wclear(inputWin);
       mvwprintw(inputWin, 0, 0, "%s", separator);
       wrefresh(inputWin);
+    }
+    if (ch == 27) { // Escape
+      clear();
+      refresh();
+      displayChat = false;
     }
   }
   
