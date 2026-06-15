@@ -71,37 +71,5 @@ int main() {
   }
   endUI();
   
-
-
-  std::cout << "Do you want to start monitoring(1 / 0): ";
-  std::cin >> choice;
-  
-  if (choice == 1)
-  _monitorRequest = std::async(std::launch::async, [portNum]() { monitor(portNum); });
- 
-  //TODO run this on a separate thread so it can be cancelled unlike async
-  while (doListening && !isConnected) {
-    std::cout << "Start connection(0 / 1): ";
-    std::cin >> choice;
-    
-    if (!isConnected && choice == 1) {
-      std::cout << "Available devices: \n";
-      showPeers();
-      std::string ip;
-      std::cout << "Enter IP to connect to: ";
-      std::getline(std::cin, ip);
-      std::getline(std::cin, ip);
-      _sendingRequest = std::async(std::launch::async, [portNum, ip]() { establishConnection(ip, portNum); });
-    }
-    else if (choice == 0 && !isConnected) {
-      std::cout << "Exit app (1 / 0)?: ";
-      std::cin >> choice;
-    
-      if (choice == 1)
-        exit(0);
-    }
-  }
-  
-  
   return 0;
 }
