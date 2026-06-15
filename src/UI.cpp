@@ -224,7 +224,7 @@ std::string displayNewChatScreen() {
 
   // TODO make better header
   wprintw(win, "====SELECT PEER TO CONNECT====\n");
-  wprintw(win, "        IP          |    nickname\n");
+  wprintw(win, "        IP         |    nickname\n");
   
   keypad(win, true);
   curs_set(0); // Sets cursor to be invisible
@@ -412,7 +412,7 @@ std::string displayChangeNicknameScreen(std::string curNick) {
       continue;
 
     // 127 is delete
-    if (ch >= ' ' && ch <= 127 && !isInputReady) {
+    if (ch >= ' ' && ch <= 127) {
       int x, y;
       getyx(nickWin, y, x);
       if (ch != 127 && x < length) {
@@ -442,7 +442,7 @@ std::string displayChangeNicknameScreen(std::string curNick) {
   }
 }
 
-
+//TODO fix the lateness after pressing Escape
 std::string displayChatsScreen(std::vector<Peer>& connectedPeers) {
   clear();
   std::vector<std::string> options;

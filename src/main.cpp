@@ -42,7 +42,10 @@ int main() {
         selectedIP = displayNewChatScreen();
         break;
       case CHATS:
-        displayChatsScreen(connectedIPs);
+        // Populate vector for test case
+        connectedIPs.emplace_back("198.168.10.12", "random guy");
+        connectedIPs.emplace_back("198.168.10.54", "Ibuprofen");
+        selectedIP = displayChatsScreen(connectedIPs);
         break;
       case CHANGE_NICKNAME:
         nick = displayChangeNicknameScreen(nickname);

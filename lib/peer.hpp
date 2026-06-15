@@ -12,6 +12,9 @@ struct Peer {
   std::string IP;
   std::string nickname;
   std::chrono::steady_clock::time_point lastSeen;
+
+  Peer(std::string IP, std::string nick) : IP(IP), nickname(nick) {};
+  Peer() : IP(""), nickname("") {};
 };
 // Processes write new peers here and remove ones which did not respond for last 3 seconds
 extern std::vector<Peer> currentPeers;
