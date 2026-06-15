@@ -10,7 +10,7 @@ int recieve(ConnectionSock& socket, std::string& message);
 
 
 void monitor(int portNum);
-void establishConnection(ConnectionSock& conSock);
+void establishConnection(ConnectionSock conSock);
 void establishConnection(std::string IPOrHost, int portNum);
 // TODO set all global vaiables to false before exiting
 // Global variables used to control async processes

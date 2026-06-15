@@ -122,8 +122,8 @@ ConnectionSock MonitorSock::accept() {
   socklen_t cliLen = sizeof(clientAddr);
 
   clientfd = ::accept(this->serverfd, (struct sockaddr* ) &clientAddr, &cliLen);
-  
-  return ConnectionSock(clientfd);
+  std::string IP = inet_ntoa(clientAddr.sin_addr);
+  return ConnectionSock(clientfd, IP);
 }
 
 // It will be user's responsibility to close all Connection sockets created from this Monitor socket
@@ -136,8 +136,9 @@ bool MonitorSock::exists() {
   return !(this->serverfd < 0);
 }
 
-ConnectionSock::ConnectionSock(int cfd) {
+ConnectionSock::ConnectionSock(int cfd, std::string IPOrHost) {
   this->clientfd = cfd;
+  this->IPOrHost = IPOrHost;
 }
 
 ConnectionSock::ConnectionSock(std::string IPOrHost, std::string port) {

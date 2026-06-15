@@ -89,7 +89,7 @@ void monitor(int portNum) {
       conSock.close();
       conSock = monSock.accept();
       // Establishing connection with socket
-      _connectionRequest = std::async(std::launch::async, [&conSock]() { establishConnection(conSock); });
+      _connectionRequest = std::async(std::launch::async, [conSock]() { establishConnection(conSock); });
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -99,7 +99,7 @@ void monitor(int portNum) {
 
 /* Makes connection with tcp socket.
  * Displays recieved messages / files and prompts to send messages / files*/
-void establishConnection(ConnectionSock& conSock) {
+void establishConnection(ConnectionSock conSock) {
   if (!conSock.exists())
     appError("Error while creating connection socket");
 

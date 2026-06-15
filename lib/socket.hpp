@@ -39,7 +39,7 @@ class ConnectionSock {
 
   public:
   ConnectionSock() : clientfd(-1) {};
-  ConnectionSock(int cfd);
+  ConnectionSock(int cfd, std::string IPOrHost);
   ConnectionSock(std::string IPOrHost, std::string port); 
 
   int send(std::string msg);
