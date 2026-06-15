@@ -4,6 +4,7 @@
 #include <future> // std::future
 #include <thread> // std::this_thread::sleep_for
 #include <filesystem>
+#include <algorithm> // std::find_if
 
 namespace fs = std::filesystem;
 
@@ -102,12 +103,18 @@ void establishConnection(ConnectionSock& conSock) {
   if (!conSock.exists())
     appError("Error while creating connection socket");
 
-  displayChat = true;
   //TODO make this into thread later
-  // Starting chat UI
-  std::future<void> displayResponce = std::async(std::launch::async, []() { displayChatScreen(); });
   isConnected = true;
   doConnection = false;
+  // IP of other peer
+  std::string peerIP = conSock.getPeerIP();
+  std::string nick = "~<error_name>~";
+  auto it = std::find_if(currentPeers.begin(), currentPeers.end(), [&peerIP](Peer p) {return peerIP == p.IP; });
+  if (it != currentPeers.end()) {
+    nick = it->nickname;
+  }
+  // Adding peer to the vector of connected Peers
+  connectedPeers.emplace_back(peerIP, nick);
 
   bool isRequestSending = false;
   bool isRequestRecieving = false;
@@ -149,9 +156,9 @@ void establishConnection(ConnectionSock& conSock) {
           // TODO handle error
           sendMsg.data = "There was error sending your message.";
           sendMsg.filename = "";
-          addMsg(sendMsg, 0); // TODO add another creator for system errors and messages
+          addMsg(peerIP, sendMsg, 0); // TODO add another creator for system errors and messages
         } else {
-          addMsg(sendMsg, 0); // The message was sent by this machine thats why second param is 0
+          addMsg(peerIP, sendMsg, 0); // The message was sent by this machine thats why second param is 0
         }
         isRequestSending = false;
       }
@@ -177,11 +184,11 @@ void establishConnection(ConnectionSock& conSock) {
           // TODO make messages be possible to send both text and file
           if (n == 2)  {
             recvMsg.data = recievedData;
-            addMsg(recvMsg, 1); // Data recieved so creator = 1
+            addMsg(peerIP, recvMsg, 1); // Data recieved so creator = 1
           }
           if (n == 4) {
             recvMsg.filename = recievedData;
-            addMsg(recvMsg, 1); // Data recievec so creator = 1
+            addMsg(peerIP, recvMsg, 1); // Data recievec so creator = 1
           }
         }
         isRequestRecieving = false;

@@ -11,15 +11,15 @@ std::string inputBuffer = "";
 bool updateScreen = false;
 bool displayChat = true;
 bool isInputReady = false;
-std::vector<std::pair<int, Msg>> chatHistory;
+IPToHistoryMap chatHistory;
 
 std::vector<std::string> homeScreenOptions = {"New Chat", "Chats", "Change Nickname", "Exit"};
 std::atomic<HOME_OPTIONS> selectedOption;
 
 
-void addMsg(Msg msg, int creator) {
+void addMsg(std::string IP, Msg msg, int creator) {
   std::pair<int, Msg> temp = std::pair<int, Msg>(creator, msg);
-  chatHistory.push_back(temp); //TODO maybe use emplace_back
+  chatHistory[IP].push_back(temp); //TODO maybe use emplace_back
   updateScreen = true;
 }
 
@@ -35,11 +35,11 @@ void endUI() {
 }
 
 // Inspired from https://invisible-island.net/ncurses/NCURSES-Programming-HOWTO.html#INIT 
-void displayChatLog(WINDOW* win) {
+void displayChatLog(WINDOW* win, std::string IP) {
   int x, y;
   wclear(win);
   // TODO add color to distinguish between peers
-  for (auto p : chatHistory) {
+  for (auto p : chatHistory[IP]) {
     getyx(win, y, x);
     if (p.first == 0) {
       if (p.second.filename == "") 
@@ -49,7 +49,8 @@ void displayChatLog(WINDOW* win) {
     }
     else {
       if (p.second.filename == "")
-        mvwprintw(win, y + 1, 0, "Message recieved: %s\n", p.second.data.c_str());
+        //mvwprintw(win, y + 1, 0, "Message recieved: %s\n", p.second.data.c_str());
+        mvwprintw(win, y + 1, 0, "Message recieved: %s\n", std::to_string(chatHistory[IP].size()).c_str());
       else
         mvwprintw(win, y + 1, 0, "File recieved: %s\n", p.second.filename.c_str());
     }
@@ -57,9 +58,9 @@ void displayChatLog(WINDOW* win) {
   wrefresh(win); // To display it into real terminal
 }
 
-void displayChatScreen() {
+void displayChatScreen(std::string IP) {
   noecho();
-  halfdelay(2); // Check for request every 200 milliseconds that user does not type
+  halfdelay(1); // Check for request every 200 milliseconds that user does not type
   WINDOW* chatWin;
   WINDOW* inputWin;
   int ch;
@@ -81,7 +82,7 @@ void displayChatScreen() {
 
   while (displayChat) {
     if (updateScreen) {
-      displayChatLog(chatWin);
+      displayChatLog(chatWin, IP);
       updateScreen = false;
     }
     
@@ -238,7 +239,7 @@ std::string displayNewChatScreen() {
   for (int i = 0; i < currentPeers.size(); ++i) {
     // Not showing IP with which the connection is already established
     // TODO implement a mutex
-    if (std::find_if(connectedIPs.begin(), connectedIPs.end(), [i](Peer p) {return p.IP == currentPeers[i].IP;}) != connectedIPs.end())
+    if (std::find_if(connectedPeers.begin(), connectedPeers.end(), [i](Peer p) {return p.IP == currentPeers[i].IP;}) != connectedPeers.end())
         continue;
     if (i == current) {
       wprintw(optionWin, "[*] %s|%s\n", format(currentPeers[i].IP, 3 * 4 + 3, '<').c_str(), currentPeers[i].nickname.c_str());

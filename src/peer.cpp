@@ -14,7 +14,7 @@ std::vector<Peer> currentPeers;
 std::atomic<bool> changeNickname = false;
 std::string nickname = "";
 std::mutex nickMutex;
-std::vector<Peer> connectedIPs;
+std::vector<Peer> connectedPeers;
 
 std::mutex discoverMutex; // Used when manipulating with currentPeers
 

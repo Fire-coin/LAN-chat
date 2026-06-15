@@ -8,6 +8,7 @@
 #include <string> // std::string
 #include <curses.h> // for WINDOW
 #include <atomic> // for std::atomic
+#include <unordered_map>
 
 enum HOME_OPTIONS {NEW_CHAT, CHATS, CHANGE_NICKNAME, EXIT, NO_OPTION};
 
@@ -17,17 +18,19 @@ extern std::string inputBuffer;
 extern bool updateScreen;
 extern bool displayChat;
 extern bool isInputReady;
-extern std::vector<std::pair<int, Msg>> chatHistory;
+// A map that maps IP of peer to the chat history with that peer
+using IPToHistoryMap = std::unordered_map<std::string, std::vector<std::pair<int, Msg>>>;
+extern IPToHistoryMap chatHistory;
 
 extern std::vector<std::string> homeScreenOptions;
 
-void addMsg(Msg msg, int creator);
+void addMsg(std::string IP, Msg msg, int creator);
 
 void beginUI();
 void endUI();
 
-void displayChatLog(WINDOW* win);
-void displayChatScreen();
+void displayChatLog(WINDOW* win, std::string IP);
+void displayChatScreen(std::string IP);
 int selector(std::vector<std::string>& options, WINDOW* win);
 HOME_OPTIONS displayHomeScreen();
 std::string displayNewChatScreen();

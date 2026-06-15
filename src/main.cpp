@@ -29,10 +29,11 @@ int main() {
   // Currently doing test for UDP discovery
   // TODO run this rather on a thread to be able to cancel it
   std::future<void> _discoverRequest = std::async(std::launch::async, [discoveryPortNum]() { discoverPeers(discoveryPortNum); });
+  _monitorRequest = std::async(std::launch::async, [portNum]() { monitor(portNum); });
   
   std::string selectedIP;
   std::string nick;
-  HOME_OPTIONS selectedOption;
+  HOME_OPTIONS selectedOption = NO_OPTION;
   bool showUI = true;
   beginUI();
   while (showUI) {
@@ -40,12 +41,16 @@ int main() {
     switch (selectedOption) {
       case NEW_CHAT:
         selectedIP = displayNewChatScreen();
+        if (selectedIP == "")
+          break;
+        _sendingRequest = std::async(std::launch::async, [portNum, selectedIP]() { establishConnection(selectedIP, portNum); });
+        displayChatScreen(selectedIP);
         break;
-      case CHATS:
+      case CHATS: // TODO add mutex for connectedPeers
         // Populate vector for test case
-        connectedIPs.emplace_back("198.168.10.12", "random guy");
-        connectedIPs.emplace_back("198.168.10.54", "Ibuprofen");
-        selectedIP = displayChatsScreen(connectedIPs);
+        connectedPeers.emplace_back("198.168.10.12", "random guy");
+        connectedPeers.emplace_back("198.168.10.54", "Ibuprofen");
+        selectedIP = displayChatsScreen(connectedPeers);
         break;
       case CHANGE_NICKNAME:
         nick = displayChangeNicknameScreen(nickname);

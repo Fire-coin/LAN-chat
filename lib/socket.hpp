@@ -47,6 +47,7 @@ class ConnectionSock {
   int recieve(Msg& msg);
   bool exists();
   void close();
+  std::string getPeerIP();
 };
 
 

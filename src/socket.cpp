@@ -301,3 +301,7 @@ void ConnectionSock::close() {
 bool ConnectionSock::exists() {
   return !(this->clientfd < 0);
 }
+
+std::string ConnectionSock::getPeerIP() {
+  return this->IPOrHost;
+}
