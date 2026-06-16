@@ -40,3 +40,33 @@ std::string getFilename(const std::string& path) {
   else
     return path.substr(index + 1);
 }
+
+std::string getCurDir() {
+  return fs::current_path().string();
+}
+
+std::string changeDir(std::string path, std::string dir) {
+  fs::path p(path);
+  p /= dir;
+  return p.string();
+}
+
+std::string getParentDir(std::string curPath) {
+  fs::path p(curPath);
+  return p.parent_path().string();
+}
+
+void getDirContents(std::vector<std::string>& files, std::string p) {
+  files.clear();
+  files.push_back("..");
+  
+  for (const auto& dirEntry : fs::directory_iterator{p}) {
+    fs::path fileOrDir = dirEntry.path();
+    if (is_directory(fileOrDir)) {
+      // Directory will have a slash at the end of the filename
+      files.push_back(fileOrDir.filename().string().append("/"));
+    } else {
+      files.push_back(fileOrDir.filename().string());
+    }
+  }
+}

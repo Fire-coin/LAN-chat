@@ -3,6 +3,7 @@
 #include "socketFuncs.hpp"
 #include "fileFuncs.hpp"
 #include "peer.hpp"
+#include "fileSelector.hpp"
 #include <iostream> // std::cout, std::cin
 #include <vector> // std::vector
 #include <future> // std::future
@@ -36,6 +37,8 @@ int main() {
   HOME_OPTIONS selectedOption = NO_OPTION;
   bool showUI = true;
   beginUI();
+  // testing file selector
+  displayFileSelector();
   while (showUI) {
     selectedOption = displayHomeScreen();
     switch (selectedOption) {

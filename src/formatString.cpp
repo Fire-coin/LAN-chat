@@ -28,3 +28,8 @@ std::string format(std::string& input, int outSize, char position) {
       return out;
   }
 }
+
+std::string format(const char* input, int outSize, char position) {
+  std::string in(input);
+  return format(in, outSize, position);
+}
