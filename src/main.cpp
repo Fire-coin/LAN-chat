@@ -54,17 +54,17 @@ int main() {
         displayChatScreen(selectedIP);
         break;
       case CHANGE_NICKNAME:
-        nick = displayChangeNicknameScreen(nickname);
+        nick = displayChangeNicknameScreen(globalNickname);
         if (nick == "~|NO_change|~")
           break;
         nickMutex.lock();
-        if (nick != nickname) {
-          nickname = nick;
+        if (nick != globalNickname) {
+          globalNickname = nick;
           changeNickname = true;
         }
         nickMutex.unlock();
         break;
-      case EXIT:
+      case EXIT: // TODO end all processes
         showUI = false;
         break;
     }

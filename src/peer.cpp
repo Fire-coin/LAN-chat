@@ -12,7 +12,7 @@
 std::vector<Peer> currentPeers;
 
 std::atomic<bool> changeNickname = false;
-std::string nickname = "";
+std::string globalNickname = "";
 std::mutex nickMutex;
 std::vector<Peer> connectedPeers;
 
@@ -42,7 +42,7 @@ void discoverPeers(int portNum) {
   while (doPeerDiscovery) {
     if (changeNickname) {
       nickMutex.lock();
-      uSock.changeNickname(nickname);
+      uSock.changeNickname(globalNickname);
       nickMutex.unlock();
       changeNickname = false;
     }

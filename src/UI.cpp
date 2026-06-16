@@ -473,7 +473,7 @@ std::string displayChatsScreen(std::vector<Peer>& connectedPeers) {
 
   wprintw(win, "Select a chat to enter\n");
   wprintw(win, "nickname   | IP\n");
-  
+  // TODO add in real time refreshing when someone changes nickname
   wrefresh(win);
   selectorWin = newwin(options.size(), COLS, 2, 0);
   if (options.size() == 0) {

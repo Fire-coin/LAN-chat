@@ -19,7 +19,7 @@ struct Peer {
 // Processes write new peers here and remove ones which did not respond for last 3 seconds
 extern std::vector<Peer> currentPeers;
 extern std::atomic<bool> changeNickname;
-extern std::string nickname;
+extern std::string globalNickname;
 extern std::mutex nickMutex;
 extern std::vector<Peer> connectedPeers;
 
