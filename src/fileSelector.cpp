@@ -28,7 +28,7 @@ std::string displayFileSelector() {
     
     getDirContents(files, curPath);
 
-    opt = selector(files, selectorWin);
+    opt = selector(files, selectorWin, ROWS / 2 - 4, COLS / 2 - 2);
 
     if (opt == -1)
       return ""; // No file was selected

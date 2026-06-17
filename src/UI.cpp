@@ -131,7 +131,7 @@ void displayChatScreen(std::string IP) {
 }
 
 /* Displays option menu and returns the index of selected option */
-int selector(std::vector<std::string>& options, WINDOW* win) {
+int selector(std::vector<std::string>& options, WINDOW* win, int rows, int cols) {
   noecho();
   cbreak(); // Immediately get key press
 
@@ -139,7 +139,9 @@ int selector(std::vector<std::string>& options, WINDOW* win) {
   curs_set(0); // Sets cursor to be invisible
 
   int current = 0;
-  for (int i = 0; i < options.size(); ++i) {
+  for (int i = 0; i < rows; ++i) {
+    if (i >= options.size())
+      break;
     if (i == current) {
       wprintw(win, "[*] %s\n", options[i].c_str());
     } else
@@ -148,6 +150,7 @@ int selector(std::vector<std::string>& options, WINDOW* win) {
   wrefresh(win);
   int ch;
   bool update = false;
+  int arrayBegin = 0;
   while (1) {
     ch = wgetch(win);
     
@@ -178,11 +181,19 @@ int selector(std::vector<std::string>& options, WINDOW* win) {
       default:
         update = false;
     }
-    
     if (update) {
-      for (int i = 0; i < options.size(); ++i) {
+      if (arrayBegin != current / rows) { // It does not fit into single window, scroll down
+        arrayBegin = (current / rows) * rows; // should work, lazy to prove why
+        for (int i = 0; i < rows; ++i) {
+          if (i + arrayBegin < options.size())
+            mvwprintw(win, i, 0, "[ ] %s", format(options[i + arrayBegin], cols, '<').c_str());
+          else
+            mvwprintw(win, i, 0, "%s", format("", cols, '^').c_str());
+        }
+      }
+      for (int i = 0; i < rows; ++i) {
         mvwprintw(win, i, 1, " ");
-        if (i == current)
+        if (i == (current % rows))
           mvwprintw(win, i, 1, "*");
       }
       wrefresh(win);
@@ -207,7 +218,7 @@ HOME_OPTIONS displayHomeScreen() {
   
   refresh();
   wrefresh(homeWin);
-  int userChoice = selector(homeScreenOptions, optionWin);
+  int userChoice = selector(homeScreenOptions, optionWin, homeScreenOptions.size(), COLS);
 
   switch (userChoice) {
     case -1:
@@ -480,7 +491,7 @@ std::string displayChatsScreen(std::vector<Peer>& connectedPeers) {
     wprintw(selectorWin, "No peers connected\n");
     wrefresh(selectorWin);
   }
-  int opt = selector(options, selectorWin);
+  int opt = selector(options, selectorWin, options.size(), COLS);
 
   if (opt == -1)
     return "";

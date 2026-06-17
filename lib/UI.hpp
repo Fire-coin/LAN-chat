@@ -31,7 +31,7 @@ void endUI();
 
 void displayChatLog(WINDOW* win, std::string IP);
 void displayChatScreen(std::string IP);
-int selector(std::vector<std::string>& options, WINDOW* win);
+int selector(std::vector<std::string>& options, WINDOW* win, int rows, int cols);
 HOME_OPTIONS displayHomeScreen();
 std::string displayNewChatScreen();
 std::string displayChangeNicknameScreen(std::string curNick);
