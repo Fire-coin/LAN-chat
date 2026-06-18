@@ -43,7 +43,7 @@ std::string displayFileSelector() {
       }
       wclear(win);
       wrefresh(win);
-      return files[opt];
+      return curPath + '/' + files[opt];
     }
   }
 }

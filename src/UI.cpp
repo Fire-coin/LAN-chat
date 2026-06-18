@@ -1,6 +1,7 @@
 #include "UI.hpp"
 #include "peer.hpp"
 #include "formatString.hpp"
+#include "fileSelector.hpp"
 #include <ncurses.h>
 #include <cstring> // memset
 #include <algorithm>
@@ -99,7 +100,6 @@ void displayChatScreen(std::string IP) {
       if (ch != 127) {
         inputBuffer.append(reinterpret_cast<char*>(&ch));
         waddch(inputWin, ch);
-        wrefresh(inputWin);
       } else {
         int x, y;
         getyx(inputWin, y, x);
@@ -107,8 +107,18 @@ void displayChatScreen(std::string IP) {
           continue;
         inputBuffer.erase(inputBuffer.size() - 1, 1); // Erase last character from buffer
         mvwdelch(inputWin, y, x - 1);
-        wrefresh(inputWin);
       }
+      int index = inputBuffer.find(":file");
+      if (index != inputBuffer.npos) {
+        inputBuffer.erase(index, 5); // Erase the :file
+        std::string filename = displayFileSelector();
+        if (filename != "") {
+          inputBuffer = "$file=" + filename + inputBuffer;
+          mvwprintw(inputWin, 1, 0, "%s", format(inputBuffer, COLS, '<').c_str());
+          wmove(inputWin, 1, inputBuffer.size());
+        }
+      }
+      wrefresh(inputWin);
     }
     
     // Enter has been pressed
@@ -133,7 +143,7 @@ void displayChatScreen(std::string IP) {
 /* Displays option menu and returns the index of selected option */
 int selector(std::vector<std::string>& options, WINDOW* win, int rows, int cols) {
   noecho();
-  cbreak(); // Immediately get key press
+  halfdelay(1); // Immediately get key press
 
   keypad(win, true);
   curs_set(0); // Sets cursor to be invisible
@@ -141,7 +151,7 @@ int selector(std::vector<std::string>& options, WINDOW* win, int rows, int cols)
   int current = 0;
   for (int i = 0; i < rows; ++i) {
     if (i >= options.size())
-      break;
+      wprintw(win, "%s\n", format("", cols - 1, '<').c_str());
     if (i == current) {
       wprintw(win, "[*] %s\n", options[i].c_str());
     } else
@@ -178,6 +188,8 @@ int selector(std::vector<std::string>& options, WINDOW* win, int rows, int cols)
         wclear(win);
         wrefresh(win);
         return -1;
+      case ERR:
+        return -2;
       default:
         update = false;
     }
@@ -463,19 +475,11 @@ std::string displayChangeNicknameScreen(std::string curNick) {
   }
 }
 
-//TODO fix the lateness after pressing Escape
 std::string displayChatsScreen(std::vector<Peer>& connectedPeers) {
   clear();
   std::vector<std::string> options;
   
   std::string entry;
-  for (auto p : connectedPeers) {
-    entry.clear();
-    entry.append(p.nickname);
-    entry.append(" | ");
-    entry.append(p.IP);
-    options.push_back(entry);
-  }
 
   WINDOW* win;
   WINDOW* selectorWin;
@@ -486,12 +490,35 @@ std::string displayChatsScreen(std::vector<Peer>& connectedPeers) {
   wprintw(win, "nickname   | IP\n");
   // TODO add in real time refreshing when someone changes nickname
   wrefresh(win);
-  selectorWin = newwin(options.size(), COLS, 2, 0);
-  if (options.size() == 0) {
-    wprintw(selectorWin, "No peers connected\n");
-    wrefresh(selectorWin);
-  }
-  int opt = selector(options, selectorWin, options.size(), COLS);
+  int opt = -2;
+  selectorWin = newwin(ROWS - 2, COLS, 2, 0);
+  int curSize = -1;
+  do {
+    options.clear();
+    discoverMutex.lock();
+    for (auto p : connectedPeers) {
+      entry.clear();
+      entry.append(p.nickname);
+      entry.append(" | ");
+      entry.append(p.IP);
+      options.push_back(entry);
+    }
+    discoverMutex.unlock();
+    if (options.size() == 0 && curSize != options.size()) {
+      wclear(selectorWin);
+      wprintw(selectorWin, "No peers connected\n");
+      wrefresh(selectorWin);
+      curSize = options.size();
+    } else if (options.size() != 0)
+      opt = selector(options, selectorWin, ROWS - 2, COLS);
+    else {
+      int ch = wgetch(selectorWin);
+      if (ch == ERR)
+        opt = -2;
+      else if (ch == 27)
+        opt = -1;
+    }
+  } while (opt == -2);
 
   if (opt == -1)
     return "";

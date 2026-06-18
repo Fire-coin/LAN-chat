@@ -38,7 +38,7 @@ int main() {
   bool showUI = true;
   beginUI();
   // testing file selector
-  displayFileSelector();
+  //displayFileSelector();
   while (showUI) {
     selectedOption = displayHomeScreen();
     switch (selectedOption) {
