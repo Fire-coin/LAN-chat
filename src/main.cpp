@@ -39,6 +39,8 @@ int main() {
   beginUI();
   // testing file selector
   //displayFileSelector();
+  //testing error screen
+  displayError("Your computer has a virus");
   while (showUI) {
     selectedOption = displayHomeScreen();
     switch (selectedOption) {

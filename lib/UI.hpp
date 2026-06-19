@@ -24,6 +24,8 @@ extern IPToHistoryMap chatHistory;
 
 extern std::vector<std::string> homeScreenOptions;
 
+void displayError(std::string error);
+
 void addMsg(std::string IP, Msg msg, int creator);
 
 void beginUI();

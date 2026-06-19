@@ -17,6 +17,24 @@ IPToHistoryMap chatHistory;
 std::vector<std::string> homeScreenOptions = {"New Chat", "Chats", "Change Nickname", "Exit"};
 std::atomic<HOME_OPTIONS> selectedOption;
 
+void displayError(std::string error) {
+  WINDOW* win;
+  curs_set(0);
+  halfdelay(5);
+  // Center the window
+  int startY = ROWS / 4;
+  int startX = COLS / 4;
+  win = newwin(ROWS / 2, COLS / 2, startY, startX);
+  box(win, 0, 0);
+  mvwprintw(win, 1, 1, "%s", format("====LAN-chat Error====", COLS / 2 - 2, '^').c_str());
+  mvwprintw(win, 2, 1, "%s", format(error, COLS / 2 - 2, '^').c_str());
+  mvwprintw(win, ROWS / 2 - 2, 1, "%s", format("Press Escape to close this window", COLS / 2 - 2, '^').c_str());
+  wrefresh(win);
+  int ch = ERR;
+  while (ch != 27) {
+    ch = wgetch(win);
+  }
+}
 
 void addMsg(std::string IP, Msg msg, int creator) {
   std::pair<int, Msg> temp = std::pair<int, Msg>(creator, msg);
