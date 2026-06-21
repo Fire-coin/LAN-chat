@@ -494,86 +494,7 @@ std::string displayChangeNicknameScreen(std::string curNick) {
   }
 }
 
-int dynamicSelector(WINDOW* win, int rows, int cols, int& current, bool updateNeeded, std::vector<std::string>& options) {
-  noecho();
-  halfdelay(10); // Check for update every second
 
-  keypad(win, true);
-  curs_set(0); // Sets cursor to be invisible
-  if (updateNeeded) {
-    for (int i = 0; i < rows; ++i) {
-      if (i >= options.size()) {
-        mvwprintw(win, i, 0, "%s\n", format("", cols - 1, '<').c_str());
-        continue;
-      }
-      if (i == current) {
-        assert(i < options.size());
-        mvwprintw(win, i, 0, "[*] %s\n", options[i].c_str());
-      } else {
-        displayError(std::to_string(options.size()) + std::to_string(i));
-        assert(i < options.size());
-        mvwprintw(win, i, 0, "[ ] %s\n", options[i].c_str());
-      }
-    }
-    wrefresh(win);
-  }
-  int ch;
-  bool update = false;
-  int arrayBegin = 0;
-  while (1) {
-    ch = wgetch(win);
-    
-    update = true;
-    switch (ch) {
-      case 'k':
-      case KEY_UP:
-        if (current == 0)
-          current = options.size() - 1;
-        else
-          current--;
-        break;
-      case 'j':
-      case KEY_DOWN:
-        if (current == options.size() - 1)
-          current = 0;
-        else
-          current++;
-        break;
-      case 10: // Enter key
-        wclear(win);
-        wrefresh(win);
-        return current;
-      case 27: // Escape
-        wclear(win);
-        wrefresh(win);
-        return -1;
-      case ERR:
-        return -2;
-      default:
-        update = false;
-    }
-    if (update) {
-      if (arrayBegin != current / rows) { // It does not fit into single window, scroll down
-        arrayBegin = (current / rows) * rows; // should work, lazy to prove why
-        for (int i = 0; i < rows; ++i) {
-          if (i + arrayBegin < options.size()) {
-            assert(i + arrayBegin < options.size());
-            mvwprintw(win, i, 0, "[ ] %s", format(options[i + arrayBegin], cols, '<').c_str());
-          }
-          else
-            mvwprintw(win, i, 0, "%s", format("", cols, '^').c_str());
-        }
-      }
-      for (int i = 0; i < rows; ++i) {
-        mvwprintw(win, i, 1, " ");
-        if (i == (current % rows))
-          mvwprintw(win, i, 1, "*");
-      }
-      wrefresh(win);
-    }
-  }
-
-}
 // TODO fix bug, where when in Chats screnn on one device, when trying to connect to
 // other device, the other device gets infite empty messages. Only sometimes
 std::string displayChatsScreen(std::vector<Peer>& connectedPeers) {
@@ -592,56 +513,117 @@ std::string displayChatsScreen(std::vector<Peer>& connectedPeers) {
   wprintw(win, "nickname   | IP\n");
   // TODO add in real time refreshing when someone changes nickname
   wrefresh(win);
-  int opt = -2;
-  selectorWin = newwin(ROWS - 2, COLS, 2, 0);
-  int curSize = -1;
-  bool updateNeeded = true;
+  int rows = ROWS - 2;
+  int cols = COLS;
+  selectorWin = newwin(rows, cols, 2, 0);
+
+  int ch;
+  bool update = false;
+  int arrayBegin = 0;
+  bool updateWhole = true;
   int current = 0;
-  do {
+  
+  noecho();
+  halfdelay(10); // Check for update every second
+
+  keypad(win, true);
+  curs_set(0); // Sets cursor to be invisible
+  while (1) {
     tempOptions.clear();
     discoverMutex.lock();
-    for (auto p : connectedPeers) {
+    for (int i = 0; i < connectedPeers.size(); ++i) {
       entry.clear();
-      entry.append(p.nickname);
-      entry.append(" | ");
-      entry.append(p.IP);
+      entry += format(connectedPeers[i].IP, 3 * 4 + 3, '<');
+      entry += '|';
+      entry += connectedPeers[i].nickname;
       tempOptions.push_back(entry);
     }
     discoverMutex.unlock();
-    if (tempOptions.size() != curSize) {
-      updateNeeded = true;
+
+    // Check if new options are different
+    if (options.size() != tempOptions.size()) {
+      updateWhole = true;
       options = tempOptions;
-    } else {
-      assert(options.size() == tempOptions.size());
-      assert(curSize <= options.size());
-      for (int i = 0; i < curSize; ++i) {
-        assert(i < options.size());
+    }
+    else {
+      for (int i = 0; i < options.size(); ++i) {
         if (options[i] != tempOptions[i]) {
-          updateNeeded = true;
+          updateWhole = true;
           options = tempOptions;
+          break;
         }
       }
     }
-    if (options.size() == 0 && curSize != 0) {
-      wclear(selectorWin);
-      wprintw(selectorWin, "No peers connected\n");
+
+    if (updateWhole) {
+      if (options.size() == 0) {
+        wclear(selectorWin);
+        mvwprintw(selectorWin, 0, 0, "No Peers Connected\n");
+        wrefresh(selectorWin);
+        updateWhole = false;
+        continue;
+      }
+      for (int i = 0; i < rows; ++i) {
+        if (i >= options.size()) {
+          mvwprintw(selectorWin, i, 0, "%s\n", format("", cols - 1, '<').c_str());
+          continue;
+        }
+        if (i == current) {
+          mvwprintw(selectorWin, i, 0, "[*] %s\n", options[i].c_str());
+        } else {
+          mvwprintw(selectorWin, i, 0, "[ ] %s\n", options[i].c_str());
+        }
+      }
       wrefresh(selectorWin);
-      curSize = options.size();
-    } else if (options.size() != 0) {
-      opt = dynamicSelector(selectorWin, ROWS - 2, COLS, current, updateNeeded, options);
-      updateNeeded = false;
+      updateWhole = false;
     }
-    else {
-      int ch = wgetch(selectorWin);
-      if (ch == ERR)
-        opt = -2;
-      else if (ch == 27)
-        opt = -1;
+
+    ch = wgetch(selectorWin);
+    
+    update = true;
+    switch (ch) {
+      case 'k':
+      case KEY_UP:
+        if (current == 0)
+          current = options.size() - 1;
+        else
+          current--;
+        break;
+      case 'j':
+      case KEY_DOWN:
+        if (current == options.size() - 1)
+          current = 0;
+        else
+          current++;
+        break;
+      case 10: // Enter key
+        wclear(selectorWin);
+        wrefresh(selectorWin);
+        return connectedPeers[current].IP;
+      case 27: // Escape
+        wclear(selectorWin);
+        wrefresh(selectorWin);
+        return "";
+      default:
+        update = false;
     }
-  } while (opt == -2);
-
-  if (opt == -1)
-    return "";
-
-  return connectedPeers[opt].IP;
+    if (update) {
+      if (arrayBegin != current / rows) { // It does not fit into single window, scroll down
+        arrayBegin = (current / rows) * rows; // should work, lazy to prove why
+        for (int i = 0; i < rows; ++i) {
+          if (i + arrayBegin < options.size()) {
+            mvwprintw(selectorWin, i, 0, "[ ] %s", format(options[i + arrayBegin], cols, '<').c_str());
+          }
+          else
+            mvwprintw(selectorWin, i, 0, "%s", format("", cols, '^').c_str());
+        }
+      }
+      for (int i = 0; i < rows; ++i) {
+        mvwprintw(selectorWin, i, 1, " ");
+        if (i == (current % rows))
+          mvwprintw(selectorWin, i, 1, "*");
+      }
+      wrefresh(selectorWin);
+    }
+  }
 }
