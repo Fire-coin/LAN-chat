@@ -14,7 +14,7 @@ std::vector<Peer> currentPeers;
 std::atomic<bool> changeNickname = false;
 std::string globalNickname = "";
 std::mutex nickMutex;
-std::vector<Peer> connectedPeers;
+std::vector<Peer*> connectedPeers;
 
 std::mutex discoverMutex; // Used when manipulating with currentPeers
 
@@ -92,8 +92,10 @@ void discoverPeers(int portNum) {
           }
         } else {
           it->lastSeen = std::chrono::steady_clock::now();
+          it->nickname = nickname;
         }
       }
+      // TODO delete peers which went offline from connectedPeers
       // Scan if some of the peers are offline
       for (auto it = currentPeers.begin(); it != currentPeers.end();) {
         // If last packet recieved from this IP was more than 3 seconds ago

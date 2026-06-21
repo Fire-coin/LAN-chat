@@ -114,7 +114,9 @@ void establishConnection(ConnectionSock conSock) {
     nick = it->nickname;
   }
   // Adding peer to the vector of connected Peers
-  connectedPeers.emplace_back(peerIP, nick);
+  // TODO add a function which will delete the peers when they disconnect from chat
+  Peer* p = &(*it);
+  connectedPeers.push_back(p);
 
   bool isRequestSending = false;
   bool isRequestRecieving = false;

@@ -290,7 +290,7 @@ std::string displayNewChatScreen() {
   for (int i = 0; i < currentPeers.size(); ++i) {
     // Not showing IP with which the connection is already established
     // TODO implement a mutex
-    if (std::find_if(connectedPeers.begin(), connectedPeers.end(), [i](Peer p) {return p.IP == currentPeers[i].IP;}) != connectedPeers.end())
+    if (std::find_if(connectedPeers.begin(), connectedPeers.end(), [i](Peer* p) {return p->IP == currentPeers[i].IP;}) != connectedPeers.end())
         continue;
     if (i == current) {
       wprintw(optionWin, "[*] %s|%s\n", format(currentPeers[i].IP, 3 * 4 + 3, '<').c_str(), currentPeers[i].nickname.c_str());
@@ -497,7 +497,7 @@ std::string displayChangeNicknameScreen(std::string curNick) {
 
 // TODO fix bug, where when in Chats screnn on one device, when trying to connect to
 // other device, the other device gets infite empty messages. Only sometimes
-std::string displayChatsScreen(std::vector<Peer>& connectedPeers) {
+std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
   clear();
   std::vector<std::string> options;
   std::vector<std::string> tempOptions;
@@ -533,9 +533,9 @@ std::string displayChatsScreen(std::vector<Peer>& connectedPeers) {
     discoverMutex.lock();
     for (int i = 0; i < connectedPeers.size(); ++i) {
       entry.clear();
-      entry += format(connectedPeers[i].IP, 3 * 4 + 3, '<');
+      entry += format(connectedPeers[i]->IP, 3 * 4 + 3, '<');
       entry += '|';
-      entry += connectedPeers[i].nickname;
+      entry += connectedPeers[i]->nickname;
       tempOptions.push_back(entry);
     }
     discoverMutex.unlock();
@@ -599,7 +599,7 @@ std::string displayChatsScreen(std::vector<Peer>& connectedPeers) {
       case 10: // Enter key
         wclear(selectorWin);
         wrefresh(selectorWin);
-        return connectedPeers[current].IP;
+        return connectedPeers[current]->IP;
       case 27: // Escape
         wclear(selectorWin);
         wrefresh(selectorWin);

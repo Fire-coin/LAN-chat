@@ -37,7 +37,7 @@ int selector(std::vector<std::string>& options, WINDOW* win, int rows, int cols)
 HOME_OPTIONS displayHomeScreen();
 std::string displayNewChatScreen();
 std::string displayChangeNicknameScreen(std::string curNick);
-std::string displayChatsScreen(std::vector<Peer>& connectedPeers);
+std::string displayChatsScreen(std::vector<Peer*>& connectedPeers);
 
 
 
