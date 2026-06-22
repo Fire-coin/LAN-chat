@@ -9,6 +9,7 @@
 #include <curses.h> // for WINDOW
 #include <atomic> // for std::atomic
 #include <unordered_map>
+#include <mutex>
 
 enum HOME_OPTIONS {NEW_CHAT, CHATS, CHANGE_NICKNAME, EXIT, NO_OPTION};
 
@@ -26,6 +27,9 @@ extern std::vector<std::string> homeScreenOptions;
 
 void displayError(std::string error);
 
+extern std::mutex notificationMutex;
+extern std::unordered_map<std::string, int> notifications; // How many messages (int) recieved from other peer IP (std::string)
+extern int totalNotifications;
 void addMsg(std::string IP, Msg msg, int creator);
 
 void beginUI();

@@ -15,6 +15,10 @@ bool displayChat = true;
 bool isInputReady = false;
 IPToHistoryMap chatHistory;
 
+std::mutex notificationMutex;
+std::unordered_map<std::string, int> notifications;
+int totalNotifications = 0;
+
 std::vector<std::string> homeScreenOptions = {"New Chat", "Chats", "Change Nickname", "Exit"};
 std::atomic<HOME_OPTIONS> selectedOption;
 
@@ -38,8 +42,15 @@ void displayError(std::string error) {
 }
 
 void addMsg(std::string IP, Msg msg, int creator) {
-  std::pair<int, Msg> temp = std::pair<int, Msg>(creator, msg);
-  chatHistory[IP].push_back(temp); //TODO maybe use emplace_back
+  if (creator == 1) { // A message recieved
+    notificationMutex.lock();
+    notifications[IP]++;
+    totalNotifications++;
+    notificationMutex.unlock();
+  }
+
+  //std::pair<int, Msg> temp = std::pair<int, Msg>(creator, msg);
+  chatHistory[IP].emplace_back(creator, msg); //TODO maybe use emplace_back
   updateScreen = true;
 }
 
@@ -74,9 +85,13 @@ void displayChatLog(WINDOW* win, std::string IP) {
         mvwprintw(win, y + 1, 0, "File recieved: %s\n", p.second.filename.c_str());
     }
   }
+  notificationMutex.lock();
+  totalNotifications -= notifications[IP];
+  notifications[IP] = 0;
+  notificationMutex.unlock();
   wrefresh(win); // To display it into real terminal
 }
-
+// TODO make the messages scrollable
 void displayChatScreen(std::string IP) {
   noecho();
   halfdelay(1); // Check for request every 200 milliseconds that user does not type
@@ -103,7 +118,6 @@ void displayChatScreen(std::string IP) {
   updateScreen = true;
   wprintw(inputWin, "%s", inputBuffer.c_str());
   wrefresh(inputWin);
-
   while (displayChat) {
     if (updateScreen) {
       displayChatLog(chatWin, IP);
@@ -249,7 +263,17 @@ HOME_OPTIONS displayHomeScreen() {
   
   refresh();
   wrefresh(homeWin);
-  int userChoice = selector(homeScreenOptions, optionWin, homeScreenOptions.size(), COLS);
+  auto hso = homeScreenOptions;
+  notificationMutex.lock();
+  if (totalNotifications > 0) {
+    hso[1] += " {";
+    hso[1] += std::to_string(totalNotifications);
+    hso[1] += '}';
+  }
+  notificationMutex.unlock();
+
+  
+  int userChoice = selector(hso, optionWin, homeScreenOptions.size(), COLS);
 
   switch (userChoice) {
     case -1:
@@ -494,7 +518,7 @@ std::string displayChangeNicknameScreen(std::string curNick) {
   }
 }
 
-
+// TODO make it possible to end chats with some key e.g backspace or q
 // TODO fix bug, where when in Chats screnn on one device, when trying to connect to
 // other device, the other device gets infite empty messages. Only sometimes
 std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
@@ -511,7 +535,6 @@ std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
 
   wprintw(win, "Select a chat to enter\n");
   wprintw(win, "nickname   | IP\n");
-  // TODO add in real time refreshing when someone changes nickname
   wrefresh(win);
   int rows = ROWS - 2;
   int cols = COLS;
@@ -536,6 +559,13 @@ std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
       entry += format(connectedPeers[i]->IP, 3 * 4 + 3, '<');
       entry += '|';
       entry += connectedPeers[i]->nickname;
+      notificationMutex.lock();
+      if (notifications[connectedPeers[i]->IP] > 0) {
+        entry += " {";
+        entry += std::to_string(notifications[connectedPeers[i]->IP]);
+        entry += "}";
+      }
+      notificationMutex.unlock();
       tempOptions.push_back(entry);
     }
     discoverMutex.unlock();
