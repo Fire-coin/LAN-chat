@@ -31,13 +31,13 @@ class UDPDiscoverySock {
 };
 
 class ConnectionSock {
-  int clientfd;
   std::string port, IPOrHost;
 
   int _recievePart(void* buffer, uint64_t length);
   int _sendPart(void* buffer, uint64_t length);
 
   public:
+  int clientfd;
   ConnectionSock() : clientfd(-1) {};
   ConnectionSock(int cfd, std::string IPOrHost);
   ConnectionSock(std::string IPOrHost, std::string port); 
@@ -53,16 +53,16 @@ class ConnectionSock {
 
 class MonitorSock {
   private:
-  int serverfd; // Listening socket file descriptor  
   int clientfd, port; // Connecting socket file descriptor and port number
   struct sockaddr_in serverAddr, clientAddr;
   
   public:
+  int serverfd; // Listening socket file descriptor  
   // TODO add a bind function which will accept IP address *Only if needed
   MonitorSock(); // Default address is set to INADDR_ANY
   int bind(int portNumber);
   void listen();
-  ConnectionSock accept();
+  ConnectionSock* accept();
   void close();
   bool exists();
 

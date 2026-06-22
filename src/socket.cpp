@@ -40,6 +40,7 @@ int UDPDiscoverySock::bind(int portNum) {
   this->portNum = portNum;
   this->broadcastAddr.sin_family = AF_INET; // IPv4
   this->broadcastAddr.sin_port = htons(portNum); 
+  // TODO calculate a private broadcast adrress
   inet_aton("255.255.255.255", &this->broadcastAddr.sin_addr);
 
   //TODO move to other place probably
@@ -118,12 +119,14 @@ void MonitorSock::listen() {
 
 /* Returns a Connection socket which can communicate with other peer.
  * One must check if it exists before using it. */
-ConnectionSock MonitorSock::accept() {
+ConnectionSock* MonitorSock::accept() {
   socklen_t cliLen = sizeof(clientAddr);
 
   clientfd = ::accept(this->serverfd, (struct sockaddr* ) &clientAddr, &cliLen);
   std::string IP = inet_ntoa(clientAddr.sin_addr);
-  return ConnectionSock(clientfd, IP);
+
+  ConnectionSock* sock = new ConnectionSock(clientfd, IP);
+  return sock;
 }
 
 // It will be user's responsibility to close all Connection sockets created from this Monitor socket

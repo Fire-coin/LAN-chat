@@ -5,6 +5,10 @@
 #include <thread> // std::this_thread::sleep_for
 #include <filesystem>
 #include <algorithm> // std::find_if
+#include <sys/epoll.h> // epoll
+#include <fcntl.h>
+#include <unistd.h>
+
 
 namespace fs = std::filesystem;
 
@@ -73,30 +77,131 @@ int recieve(ConnectionSock& socket, std::string& message) {
 }
 
 /* Should always run on separate thread */
-void monitor(int portNum) {
-  MonitorSock monSock = MonitorSock();
-  ConnectionSock conSock;
-  std::future<void> _connectionRequest; // Added here to supress warning
-  
-  //TODO handle this better
-  if (monSock.bind(portNum))
-      appError("Error while monitoring socket");
+//void monitor(int portNum) {
+//  MonitorSock monSock = MonitorSock();
+//  ConnectionSock conSock;
+//  std::future<void> _connectionRequest; // Added here to supress warning
+//  
+//  //TODO handle this better
+//  if (monSock.bind(portNum))
+//      appError("Error while monitoring socket");
+//
+//  monSock.listen();
+//  while (doListening) { 
+//    if (acceptConnection) {
+//      acceptConnection = false;
+//      conSock.close();
+//      conSock = monSock.accept();
+//      // Establishing connection with socket
+//      _connectionRequest = std::async(std::launch::async, [conSock]() { establishConnection(conSock); });
+//    }
+//
+//    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+//  }
+//  monSock.close();
+//}
 
-  monSock.listen();
-  while (doListening) { 
-    if (acceptConnection) {
-      acceptConnection = false;
-      conSock.close();
-      conSock = monSock.accept();
-      // Establishing connection with socket
-      _connectionRequest = std::async(std::launch::async, [conSock]() { establishConnection(conSock); });
+std::vector<ConnectionSock*> connectedSockets{};
+// from https://medium.com/@hajorda/non-blocking-sockets-and-i-o-multiplexing-with-epoll-in-c-bd3d8e54c20a
+int setNonblocking(int sockfd) {
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    if (flags == -1) {
+        displayError("fcntl(F_GETFL)");
+        return -1;
     }
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-  }
-  monSock.close();
+    if (fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) == -1) {
+        displayError("fcntl(F_SETFL)");
+        return -1;
+    }
+    return 0;
 }
 
+/* Handles both connection requests and recieving requests (user recieves data from other peers) */
+void handlePeerRequests(int portNum) {
+  MonitorSock monSock = MonitorSock();
+
+  if (monSock.bind(portNum))
+      displayError("Error binding monitoring socket");
+  
+  setNonblocking(monSock.serverfd);
+
+  monSock.listen();
+
+  int epollFd = epoll_create1(0);
+  if (epollFd == -1) {
+    displayError("epoll_create1");
+    return;
+  }
+  
+  struct epoll_event event;
+  event.events = EPOLLIN;
+  event.data.fd = monSock.serverfd;
+  
+  if (epoll_ctl(epollFd, EPOLL_CTL_ADD, monSock.serverfd, &event) == -1) {
+    displayError("epoll_ctl: serverfd");
+    return;
+  }
+
+  constexpr int maxEvents = 10;
+  struct epoll_event events[maxEvents];
+  
+  // TODO add some terminating condition here
+  while (1) {
+    int newEvents = epoll_wait(epollFd, events, maxEvents, -1);
+
+    if (newEvents == -1) {
+      displayError("epoll_wait");
+      return;
+    }
+    
+    for (int i = 0; i < newEvents; ++i) {
+      // New connection request occured
+      if (events[i].data.fd == monSock.serverfd) {
+        while (1) {
+          ConnectionSock* sock = monSock.accept(); 
+          if (sock->clientfd == -1) {
+            // All incoming connections have been processed
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+              break;
+            else {
+              displayError("accept");
+            }
+          }
+          setNonblocking(sock->clientfd); 
+          event.events = EPOLLIN | EPOLLET;
+          event.data.fd = sock->clientfd;
+          
+          // Adding new peer for monitoring by epoll
+          if (epoll_ctl(epollFd, EPOLL_CTL_ADD, sock->clientfd, &event) == -1) {
+            displayError("epoll_ctl: clientFd");
+            sock->close();
+            continue;
+          }
+
+          connectedSockets.push_back(sock);
+        }
+        
+
+      } else {
+        int clientFd = events[i].data.fd;
+        auto it = std::find_if(connectedSockets.begin(), connectedSockets.end(), [clientFd](ConnectionSock* sock) {return sock->clientfd == clientFd; });
+        if (it == connectedSockets.end()) {
+          displayError("Recieve request from non connected socket recieved");
+          continue;
+        }
+        Msg msg{};
+        // TODO add check for closing file (returned size by recv(fd, ...) == 0)
+        if ((*it)->recieve(msg) != 0) {
+          displayError("Error while recieving message");
+          continue;
+        }
+        addMsg((*it)->getPeerIP(), msg, 1);
+      }
+    }
+  }
+}
+
+// TODO use epoll instead of bunch of threads
 /* Makes connection with tcp socket.
  * Displays recieved messages / files and prompts to send messages / files*/
 void establishConnection(ConnectionSock conSock) {
