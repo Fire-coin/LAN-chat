@@ -9,15 +9,17 @@
 #include <algorithm> // find_if
 
 
-std::vector<Peer> currentPeers;
+std::vector<Peer> currentPeers; // Stores discovered peers, which are currently online
+std::mutex discoverMutex; // Used when manipulating with currentPeers
 
 std::atomic<bool> changeNickname = false;
 std::string globalNickname = "";
 std::mutex nickMutex;
 std::vector<Peer*> connectedPeers;
+//TODO add mutex for connectedPeers
 
-std::mutex discoverMutex; // Used when manipulating with currentPeers
 
+std::atomic<bool> doPeerDiscovery = true;
 
 // TODO abolish async and use threads because these do not return anything
 void discoverPeers(int portNum) {

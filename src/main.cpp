@@ -29,9 +29,11 @@ int main() {
 
   // Currently doing test for UDP discovery
   // TODO run this rather on a thread to be able to cancel it
-  std::future<void> _discoverRequest = std::async(std::launch::async, [discoveryPortNum]() { discoverPeers(discoveryPortNum); });
-  _monitorRequest = std::async(std::launch::async, [portNum]() { monitor(portNum); });
-  
+  std::thread discoveryThread(discoverPeers, discoveryPortNum);
+  //std::future<void> _discoverRequest = std::async(std::launch::async, [discoveryPortNum]() { discoverPeers(discoveryPortNum); });
+  //_monitorRequest = std::async(std::launch::async, [portNum]() { monitor(portNum); });
+  std::thread peerRequestsThread(handlePeerRequests, portNum);
+
   std::string selectedIP;
   std::string nick;
   HOME_OPTIONS selectedOption = NO_OPTION;
@@ -48,7 +50,7 @@ int main() {
         selectedIP = displayNewChatScreen();
         if (selectedIP == "")
           break;
-        _sendingRequest = std::async(std::launch::async, [portNum, selectedIP]() { establishConnection(selectedIP, portNum); });
+        establishConnection(selectedIP, portNum);
         displayChatScreen(selectedIP);
         break;
       case CHATS: // TODO add mutex for connectedPeers
@@ -75,6 +77,12 @@ int main() {
     }
   }
   endUI();
+
+  handleRequests = false;
+  doPeerDiscovery = false;
+
+  discoveryThread.join();
+  peerRequestsThread.join();
   
   return 0;
 }

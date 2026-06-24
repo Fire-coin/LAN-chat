@@ -254,7 +254,9 @@ int ConnectionSock::recieve(Msg& msg) {
   uint16_t filenameLength = 0;
   std::string filename;
   std::string data;
-  
+  /* TODO rewrite this code for epoll use case
+   * if -1 recieved, check if errno = EAGAIN*/
+
   int n = -1;
 
   

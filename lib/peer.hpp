@@ -26,6 +26,7 @@ extern std::vector<Peer*> connectedPeers;
 extern std::mutex discoverMutex;
 
 void discoverPeers(int portNum);
+extern std::atomic<bool> doPeerDiscovery;
 void showPeers();
 std::vector<std::string> getMachineIPs();
 

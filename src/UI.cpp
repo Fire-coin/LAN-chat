@@ -6,6 +6,7 @@
 #include <cstring> // memset
 #include <algorithm>
 #include <cassert>
+#include "socketFuncs.hpp"
 
 int ROWS, COLS;
 
@@ -156,7 +157,7 @@ void displayChatScreen(std::string IP) {
     
     // Enter has been pressed
     if (ch == 10) {
-      isInputReady = true;
+      sendMessage(IP, inputBuffer);
       // TODO make better way to clear the line
       wclear(inputWin);
       mvwprintw(inputWin, 0, 0, "%s", separator);
