@@ -23,15 +23,9 @@ int main() {
   int choice;
   int portNum = 55555;
   int discoveryPortNum = 5000;
-  // Both added to supress compiler warnings
-  std::future<void> _monitorRequest;
-  std::future<void> _sendingRequest;
 
   // Currently doing test for UDP discovery
-  // TODO run this rather on a thread to be able to cancel it
   std::thread discoveryThread(discoverPeers, discoveryPortNum);
-  //std::future<void> _discoverRequest = std::async(std::launch::async, [discoveryPortNum]() { discoverPeers(discoveryPortNum); });
-  //_monitorRequest = std::async(std::launch::async, [portNum]() { monitor(portNum); });
   std::thread peerRequestsThread(handlePeerRequests, portNum);
 
   std::string selectedIP;
@@ -39,10 +33,6 @@ int main() {
   HOME_OPTIONS selectedOption = NO_OPTION;
   bool showUI = true;
   beginUI();
-  // testing file selector
-  //displayFileSelector();
-  //testing error screen
-  displayError("Your computer has a virus");
   while (showUI) {
     selectedOption = displayHomeScreen();
     switch (selectedOption) {
@@ -72,14 +62,13 @@ int main() {
         nickMutex.unlock();
         break;
       case EXIT: // TODO end all processes
+        handleRequests = false;
+        doPeerDiscovery = false;
         showUI = false;
         break;
     }
   }
   endUI();
-
-  handleRequests = false;
-  doPeerDiscovery = false;
 
   discoveryThread.join();
   peerRequestsThread.join();

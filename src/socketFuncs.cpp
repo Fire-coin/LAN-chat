@@ -13,39 +13,37 @@
 
 namespace fs = std::filesystem;
 
-bool acceptConnection = true;
-bool doConnection = true;
-bool doListening = true;
-bool isConnected = false;
 //bool doPeerDiscovery = true;
 // TODO make a function which would display perror messages in UI
 
 std::atomic<bool> handleRequests = true;
 int epollFd;
 
-/* Send message through socket. If error occures it closes the socket. */
-bool _sendMessage(ConnectionSock* socket, std::string msg) {
-  int n = 0;
-  n = socket->send(msg);
-  if (n < 0) {
-    return false;
-  }
-  return true;
-}
 
-int _sendFile(ConnectionSock* socket, std::string filepath) {
+int processFile(std::string& filepath, Msg& msg) {
   int error = 0;
-  int n = 0;
   std::string filename;
   std::fstream file;
+
   error = handleFile(filepath, file); // Opening the file and handling errors
   if (error > 0)
-    return 1; // Error with file
+    return -1; // Error with file
   filename = getFilename(filepath);
-  n = socket->sendFile(file, filename);
-  if (n < 0) {
-    return 2; // Error sending the file
-  }
+  msg.filename = filename;
+
+  // Get length of file
+  file.seekg(0, file.end);
+  int64_t fileLength = file.tellg();
+  file.seekg(0, file.beg);
+  
+  // Get length of filename
+  int16_t filenameLength = filename.size();
+  // Reserve space for file data
+  msg.data.resize(fileLength);
+  file.read(msg.data.data(), fileLength);
+
+  file.close();
+
   return 0;
 }
 
@@ -55,9 +53,11 @@ int sendMessage(std::string& IP, std::string& message) {
   if (index == message.npos) { // Text message
     msg.data = message;
   } else { // File
-    // TODO make filename structure be $file={<filename>}
-    std::string filename = std::string(message.begin() + index + 6, message.end()); // We add + 6 bytes to start from the filename
-    msg.filename = filename;
+    // TODO make filename structure be $file={<filepath>}
+    std::string filepath = std::string(message.begin() + index + 6, message.end()); // We add + 6 bytes to start from the filepath
+    int err = processFile(filepath, msg);
+    if (err == -1)
+      return 4;
   }
   message = "";
 
@@ -67,35 +67,25 @@ int sendMessage(std::string& IP, std::string& message) {
   if (it == connectedSockets.end())
     return 1; // Peer is not connected
 
-  
-  if (msg.filename == "") { // Normal message
-    if (msg.data == "")
-      return 3; // Empty message data not allowed
-    bool success = _sendMessage(*it, msg.data);
-    if (!success) 
-      return 2; // Error sending message
-  } else { // File
-      int err = _sendFile(*it, msg.filename);
-      if (err == 1)
-        return 4; // file error
-      if (err == 2)
-        return 2; // Error sending message
-  }
+  int err = (*it)->sendMsg(msg);
+  if (err == -1)
+    return -1; // epoll_ctl
+
+  // TODO add historyMsg struct for history, and use Msg to communicate with socket classes instead of strings
   addMsg(IP, msg, 0);
   return 0;
 }
 
 int recieve(ConnectionSock* socket, Msg& msg) {
   int n = socket->recieve(msg);
-  if (n == 1)
-    return 1; // Error while transmitting
+  if (n != 0)
+    return n;
 
   if (msg.filename == "")  // Plain message
    return 0;
   
   // TODO make a function for this in fileFuncs.cpp
   // Create a file in LAN-chat directory
-  std::cout << "here\n";
   std::string dirName = ".LAN-chat_files";
   fs::path dirPath = fs::current_path() / dirName;
   if (!fs::is_directory(dirPath))
@@ -103,17 +93,12 @@ int recieve(ConnectionSock* socket, Msg& msg) {
   
   dirName.append("/");
   dirName.append(msg.filename);
-  try {
   std::fstream file(dirName, std::fstream::out | std::fstream::binary);
   if (!file.is_open())
-    return 2; // Error with file
+    return 4; // Error with file
   
   file.write(msg.data.data(), msg.data.size());
   file.close();
-  } catch (const std::bad_alloc& e) {
-    displayError("Bad alloc in recieve");
-    std::cerr << "yo\n";
-  }
   return 0; // File was written succesfully
 }
 
@@ -133,7 +118,13 @@ int setNonblocking(int sockfd) {
 
 /* Handles both connection requests and recieving requests (user recieves data from other peers) */
 void handlePeerRequests(int portNum) {
-  MonitorSock monSock = MonitorSock();
+  epollFd = epoll_create1(0);
+  if (epollFd == -1) {
+    displayError("epoll_create1");
+    return;
+  }
+
+  MonitorSock monSock = MonitorSock(epollFd);
 
   if (monSock.bind(portNum))
       displayError("Error binding monitoring socket");
@@ -150,11 +141,6 @@ void handlePeerRequests(int portNum) {
 
   monSock.listen();
 
-  epollFd = epoll_create1(0);
-  if (epollFd == -1) {
-    displayError("epoll_create1");
-    return;
-  }
   
   struct epoll_event event;
   event.events = EPOLLIN;
@@ -190,15 +176,16 @@ void handlePeerRequests(int portNum) {
               return;
             }
           }
-          //int err = setNonblocking(sock->clientfd);
-          //if (err == 1) {
-          //  displayError("fcntl(F_GETFL)");
-          //  return;
-          //}
-          //if (err == 2) {
-          //  displayError("fcntl(F_SETFL)");
-          //  return;
-          //}
+          int err = setNonblocking(sock->clientfd);
+          if (err == 1) {
+            displayError("fcntl(F_GETFL)");
+            return;
+          }
+          if (err == 2) {
+            displayError("fcntl(F_SETFL)");
+            return;
+          }
+
           event.events = EPOLLIN | EPOLLET;
           event.data.fd = sock->clientfd;
           // Adding new peer for monitoring by epoll
@@ -218,6 +205,7 @@ void handlePeerRequests(int portNum) {
           connectedSockets.push_back(sock);
         }
       } else { // There is a read available on a socket
+        // TODO check for events either EPOLLIN or EPOLLOUT
         int clientFd = events[i].data.fd;
         auto it = std::find_if(connectedSockets.begin(), connectedSockets.end(), [clientFd](ConnectionSock* sock) {return sock->clientfd == clientFd; });
         if (it == connectedSockets.end()) {
@@ -225,25 +213,26 @@ void handlePeerRequests(int portNum) {
           continue;
         }
         Msg msg;
-        ConnectionSock* sock = *it;
-        try {
-          // TODO add check for closing file (returned size by recv(fd, ...) == 0)
-          if (sock->recieve(msg) != 0) {
-            //displayError("Error while recieving message");
-            continue;
+        // TODO add check for closing file (returned size by recv(fd, ...) == 0)
+        int err;
+        do {
+          err = recieve(*it, msg);
+          // Other peer closed file descriptor
+          if (err == 2) { 
+            connectedSockets.erase(it);
+            // TODO make the removing peer code 
+            delete *it;
           }
-        } catch (const std::bad_alloc& e) {
-          displayError(e.what());
-          return;
         }
-        addMsg((sock)->getPeerIP(), msg, 1);
+        while (err == 1);
+        addMsg((*it)->getPeerIP(), msg, 1);
       }
     }
   }
   close(epollFd);
 }
 
-void establishConnection(std::string IPOrHost, int portNum) {
+void establishConnection(std::string& IPOrHost, int portNum) {
   // finding the peer to which user wants to connect in available peers
   auto it = std::find_if(currentPeers.begin(), currentPeers.end(), [&IPOrHost](Peer p) {return IPOrHost == p.IP; });
   if (it == currentPeers.end()) {
@@ -254,22 +243,22 @@ void establishConnection(std::string IPOrHost, int portNum) {
   Peer* p = &(*it);
   connectedPeers.push_back(p);
 
-  ConnectionSock* sock = new ConnectionSock(IPOrHost, std::to_string(portNum));
+  ConnectionSock* sock = new ConnectionSock(IPOrHost, std::to_string(portNum), epollFd);
   if (!sock->exists()) {
     displayError("Error establishing connection: ConnectionSock does not exist");
     return;
   }
   
   struct epoll_event event;
- // int err = setNonblocking(sock->clientfd);
- // if (err == 1) {
- //   displayError("fcntl(F_GETFL)");
- //   return;
- // }
- // if (err == 2) {
- //   displayError("fcntl(F_SETFL)");
- //   return;
- // }
+  int err = setNonblocking(sock->clientfd);
+  if (err == 1) {
+    displayError("fcntl(F_GETFL)");
+    return;
+  }
+  if (err == 2) {
+    displayError("fcntl(F_SETFL)");
+    return;
+  }
   event.events = EPOLLIN | EPOLLET;
   event.data.fd = sock->clientfd;
 
@@ -282,119 +271,3 @@ void establishConnection(std::string IPOrHost, int portNum) {
 
   connectedSockets.push_back(sock);
 }
-
-
-// TODO use epoll instead of bunch of threads
-/* Makes connection with tcp socket.
- * Displays recieved messages / files and prompts to send messages / files*/
-//void establishConnection(ConnectionSock conSock) {
-//  if (!conSock.exists())
-//    appError("Error while creating connection socket");
-//
-//  //TODO make this into thread later
-//  isConnected = true;
-//  doConnection = false;
-//  // IP of other peer
-//  std::string peerIP = conSock.getPeerIP();
-//  std::string nick = "~<error_name>~";
-//  auto it = std::find_if(currentPeers.begin(), currentPeers.end(), [&peerIP](Peer p) {return peerIP == p.IP; });
-//  if (it != currentPeers.end()) {
-//    nick = it->nickname;
-//  }
-//  // Adding peer to the vector of connected Peers
-//  // TODO add a function which will delete the peers when they disconnect from chat
-//  Peer* p = &(*it);
-//  connectedPeers.push_back(p);
-//
-//  bool isRequestSending = false;
-//  bool isRequestRecieving = false;
-//  std::future<bool> sendResponce;
-//  std::future<int> recieveResponce;
-//  Msg sendMsg, recvMsg;
-//  std::string recievedData, sendData, filename;
-//
-//  // TODO add condition which will be possible to terminate from other thread
-//  while (sendData != "exit" && conSock.exists() && recievedData != "exit") {
-//
-//    if (isInputReady) {
-//      // Start with a new request to send when there is none currently
-//      if (!isRequestSending) {
-//        isRequestSending = true;
-//        sendData = inputBuffer;
-//        sendMsg.filename = "";
-//        sendMsg.data = "";
-//        if (sendData.find("$file=") == sendData.npos) { // Text message
-//          sendMsg.data = sendData;
-//          sendResponce = std::async(std::launch::async, [&conSock, sendData]() { return sendMessage(conSock, sendData); });
-//        } else { // File
-//          int index = sendData.find("$file=");
-//          // TODO make filename structure be $file={<filename>}
-//          std::string filename = std::string(sendData.begin() + index + 6, sendData.end()); // We add + 6 bytes to start from the filename
-//          sendMsg.filename = filename;
-//          sendResponce = std::async(std::launch::async, [&conSock, filename]() { return sendFile(conSock, filename); });
-//        }
-//        inputBuffer = "";
-//        isInputReady = false;
-//      }
-//    }
-//
-//    if (sendResponce.valid()) {
-//      auto sendStatus = sendResponce.wait_for(std::chrono::milliseconds(0));
-//      if (sendStatus == std::future_status::ready) {
-//        bool sendSuccess = sendResponce.get();
-//        if (!sendSuccess) {
-//          // TODO handle error
-//          sendMsg.data = "There was error sending your message.";
-//          sendMsg.filename = "";
-//          addMsg(peerIP, sendMsg, 0); // TODO add another creator for system errors and messages
-//        } else {
-//          addMsg(peerIP, sendMsg, 0); // The message was sent by this machine thats why second param is 0
-//        }
-//        isRequestSending = false;
-//      }
-//    }
-//
-//    // Start new recieving request only if none is currently pending 
-//    if (!isRequestRecieving) {
-//      isRequestRecieving = true;
-//      recvMsg.filename = "";
-//      recvMsg.data = "";
-//      recieveResponce = std::async(std::launch::async, [&conSock, &recievedData]() { return recieve(conSock, recievedData); });
-//    }
-//    
-//    if (recieveResponce.valid()) {
-//      auto recieveStatus = recieveResponce.wait_for(std::chrono::milliseconds(0));
-//
-//      if (recieveStatus == std::future_status::ready) {
-//        int n = recieveResponce.get(); 
-//
-//        if (n == 1 || n == 3) // Some error
-//          continue; // Handle them later
-//        if (n == 2 || n == 4) {
-//          // TODO make messages be possible to send both text and file
-//          if (n == 2)  {
-//            recvMsg.data = recievedData;
-//            addMsg(peerIP, recvMsg, 1); // Data recieved so creator = 1
-//          }
-//          if (n == 4) {
-//            recvMsg.filename = recievedData;
-//            addMsg(peerIP, recvMsg, 1); // Data recievec so creator = 1
-//          }
-//        }
-//        isRequestRecieving = false;
-//      }
-//    }
-//  }
-//  isConnected = false;
-//  doConnection = true;
-//  acceptConnection = true;
-//  conSock.close();
-//}
-//
-// TODO convert IPOrHost with inet_pton into binary value
-//void establishConnection(std::string IPOrHost, int portNum) {
-//  if (doConnection) {
-//    ConnectionSock conSock = ConnectionSock(IPOrHost, std::to_string(portNum));
-//    establishConnection(conSock);
-//  }
-//}

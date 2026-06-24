@@ -11,6 +11,8 @@
 #include <arpa/inet.h>
 #include <thread>
 #include <chrono>
+#include <sys/epoll.h>
+#include "UI.hpp"
 
 
 
@@ -98,7 +100,8 @@ void UDPDiscoverySock::changeNickname(std::string newNickname) {
   this->nickname = newNickname;
 }
 
-MonitorSock::MonitorSock() {
+MonitorSock::MonitorSock(int epollFd) {
+  this->epollFd = epollFd;
   // IPv4 TCP socket
   this->serverfd = socket(AF_INET, SOCK_STREAM, 0);
   memset(&serverAddr, 0, sizeof(serverAddr));
@@ -125,7 +128,7 @@ ConnectionSock* MonitorSock::accept() {
   clientfd = ::accept(this->serverfd, (struct sockaddr* ) &clientAddr, &cliLen);
   std::string IP = inet_ntoa(clientAddr.sin_addr);
 
-  ConnectionSock* sock = new ConnectionSock(clientfd, IP);
+  ConnectionSock* sock = new ConnectionSock(clientfd, IP, this->epollFd);
   return sock;
 }
 
@@ -139,18 +142,22 @@ bool MonitorSock::exists() {
   return !(this->serverfd < 0);
 }
 
-ConnectionSock::ConnectionSock(int cfd, std::string IPOrHost) {
+ConnectionSock::ConnectionSock(int cfd, std::string& IPOrHost, int epollFd) {
   this->clientfd = cfd;
   this->IPOrHost = IPOrHost;
+  this->isEpollout = false;
+  this->epollFd = epollFd;
 }
 
-ConnectionSock::ConnectionSock(std::string IPOrHost, std::string port) {
+ConnectionSock::ConnectionSock(std::string& IPOrHost, std::string port, int epollFd) {
   struct addrinfo  hints;
   struct addrinfo  *result, *rp;
   int s;
   
   this->port = port;
   this->IPOrHost = IPOrHost;
+  this->isEpollout = false;
+  this->epollFd = epollFd;
 
   memset(&hints, 0, sizeof(hints));
 
@@ -179,122 +186,168 @@ ConnectionSock::ConnectionSock(std::string IPOrHost, std::string port) {
   if (rp == NULL)
     fprintf(stderr, "Could not connect\n");
 }
-// TODO make the display of errors more consistent
 
 
 int ConnectionSock::_sendPart(void* buffer, uint64_t length) {
   uint64_t transmitted = 0;
-  int n = -1;
+  int64_t n = -1;
   while (transmitted < length) {
     n = ::send(this->clientfd, static_cast<char*>(buffer) + transmitted, length - transmitted, 0);
-    if (n < 0)
+    if (n == -1) {
+      if (errno == EAGAIN)
+        return 0;
+
       return -1;
+    }
     transmitted += n;
   }
 
-  return 0;
+  return transmitted;
 }
-// TODO implement htons or network file order
-int ConnectionSock::sendFile(std::fstream& file, std::string& filename) {
-  // Get length of file
-  file.seekg(0, file.end);
-  uint64_t fileLength = file.tellg();
-  file.seekg(0, file.beg);
+
+int ConnectionSock::send() {
+  msgBufferMutex.lock();
+  // Getting next message to be sent from buffer
+  if (sendMsgBuffer.empty()) {
+    msgBufferMutex.unlock();
+    return 0;
+  }
+
+  auto& bufMsg = this->sendMsgBuffer.front();
+  std::string& message = bufMsg.first;
+  uint64_t& offset = bufMsg.second;
   
-  // Get length of filename
-  uint16_t filenameLength = filename.size();
-  //std::cout << "Sending filename length of: " << filenameLength << " and filename is: " << filename << std::endl;
-  // Create buffer for data and read data into it
-  std::vector<char> dataBuffer(fileLength);
-  file.read(dataBuffer.data(), fileLength);
+  uint64_t msgSize = message.size();
 
-  file.close();
-  // Sending each field separately
-  this->_sendPart(&fileLength, 8);
-  this->_sendPart(&filenameLength, 2);
-  this->_sendPart(filename.data(), filenameLength);
-  this->_sendPart(dataBuffer.data(), fileLength);
+  int64_t n = this->_sendPart(message.data() + offset, msgSize - offset);
+  
+  // Whole message was sent
+  if (offset + n == msgSize) {
+    this->sendMsgBuffer.pop();
+    // All the messages from the buffer have been sent, no need to track write events
+    if (sendMsgBuffer.empty()) {
+      this->isEpollout = false;
+      struct epoll_event event;
+      event.events = EPOLLIN | EPOLLET;
+      event.data.fd = this->clientfd;
+      
+      msgBufferMutex.unlock();
+      return epoll_ctl(this->epollFd, EPOLL_CTL_MOD, this->clientfd, &event);
+    }
+    // Call to send another message until either buffer is empty or send buffer is full
+    msgBufferMutex.unlock();
+    return this->send();
+  }
+  // Shifting offset
+  offset += n;
+  // There is still message in buffer, tell epoll to track write events
+  if (!this->isEpollout) {
+    this->isEpollout = true;
+    struct epoll_event event;
+    event.events = EPOLLIN | EPOLLOUT | EPOLLET;
+    event.data.fd = this->clientfd;
+    
+    msgBufferMutex.unlock();
+    return epoll_ctl(this->epollFd, EPOLL_CTL_MOD, this->clientfd, &event);
+  }
 
+  msgBufferMutex.unlock();
   return 0;
 }
 
-int ConnectionSock::send(std::string msg) {
+/* Pushes the message to be sent into queue, then calls a method to send the data */
+int ConnectionSock::sendMsg(Msg& msg) {
   std::string message;
-  uint64_t msgSize = msg.size();
-  //std::cout << msgSize << std::endl;
-  std::string filename = "";
-  uint16_t filenameLength = 0;
-  
+  int64_t dataSize = msg.data.size();
+  int16_t filenameSize = msg.filename.size();
+  // Adding header to the message
+  message += std::string(reinterpret_cast<char*>(&dataSize), sizeof(int64_t));
+  message += std::string(reinterpret_cast<char*>(&filenameSize), sizeof(int16_t));
+  // Adding the payload of message
+  message += msg.filename;
+  message += msg.data;
 
-  this->_sendPart(&msgSize, 8);
-  this->_sendPart(&filenameLength, 2);
-  // No need for sending 0 bytes
-  //this->_sendPart(filename.data(), filenameLength);
-  this->_sendPart(msg.data(), msgSize);
-
-  return 0;
+  std::pair<std::string, int64_t> bufMsg = std::pair<std::string, int64_t>(message, 0);
+  msgBufferMutex.lock();
+  this->sendMsgBuffer.push(bufMsg);
+  msgBufferMutex.unlock();
+  return this->send();
 }
-// TODO Try to recieve everything as a single packet in order to reduce lines of code written
 
+/* Cyclically recieves every part of the packet sent by send method of other socket.
+* Works for non-blocking socket */
 int ConnectionSock::_recievePart(void* buffer, uint64_t length) {
   uint64_t recieved = 0;
-  int n = -1;
+  int64_t n = -1;
   while (recieved < length) {
     n = recv(this->clientfd, static_cast<char*>(buffer) + recieved, length - recieved, 0);
-    if (n < 0)
-      return 1;
+    if (n == 0) 
+      return -2; // Indicates that file descriptor was closed
+                
+    if (n == -1) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        // All the data was read from file descriptor
+        return recieved;
+      }
+      // If errno was not EAGAIN, an error has occured
+      return -1;
+    }
     recieved += n;
   }
-  return 0;
+  return recieved;
 }
-
-/* Cyclically recieves every part of the packet sent by send method of other socket.*/
+/* Return 0 when Msg is filled with data
+ * -1 on error
+ *  1 when no error but message not filled with data
+ *  2 when file descriptor was closed*/
 int ConnectionSock::recieve(Msg& msg) {
-  uint64_t length = 0;
-  uint16_t filenameLength = 0;
-  std::string filename;
-  std::string data;
-  /* TODO rewrite this code for epoll use case
-   * if -1 recieved, check if errno = EAGAIN*/
-
-  int n = -1;
-
-  
-  n = this->_recievePart(&length, sizeof(length));
-  if (n < 0) {
-    std::cerr << "Error while recieving length of data\n";
-    return 1;
+  int headerSize = sizeof(int64_t) + sizeof(int16_t);
+  if (!this->rawMessageStarted) {
+    memset(&this->rawMessage.header, 0, headerSize);
+    this->rawMessage.data.clear();
+    this->rawMessage.offset = 0;
+    this->rawMessageStarted = true;
   }
-  //std::cout << "Recieved length: " << length << std::endl;
-  
-  n = this->_recievePart(&filenameLength, sizeof(filenameLength));
-  if (n < 0) {
-    std::cerr << "Error while recieving length of filename\n";
-    return 1;
-  }
-  //std::cout << "Recieved filename length: " << filenameLength << std::endl;
-  
-  if (filenameLength > 0) { // Reading filename only if file was sent
-    std::vector<char> filenameBuffer(filenameLength);
 
-    n = this->_recievePart(filenameBuffer.data(), filenameLength);
-    if (n < 0) {
-      std::cerr << "Error while recieving filename\n";
+  int64_t& offset = this->rawMessage.offset;
+  Header& header = this->rawMessage.header;
+  int64_t n = -1;
+  // Recieve header info
+  while (offset < headerSize) {
+    n = this->_recievePart((char*)&header + offset, headerSize - offset);
+    //displayError(std::to_string(header.dataSize) + " " + std::to_string(header.filenameSize) + "\n" + std::to_string(offset) + " " + std::to_string(n));
+    if (n == -1) 
+      return -1;
+    if (n == -2)
+      return 2;
+    if (n == 0)
       return 1;
-    }
-    msg.filename = std::string(filenameBuffer.data(), filenameLength);
-    //std::cout << "Recieved filename: " << msg.filename << std::endl;
-  } else
-    msg.filename = "";
 
-  std::vector<char> dataBuffer(length);
-  n = this->_recievePart(dataBuffer.data(), length);
-  if (n < 0) {
-    std::cerr << "Error while recieving data\n";
-    return 1;
+    offset += n;
   }
-  msg.data = std::string(dataBuffer.data(), length);
+  // Am I sure this isnt Java?
+  int64_t totalSize = header.filenameSize + header.dataSize;
+  if (this->rawMessage.data.size() < totalSize)
+    this->rawMessage.data.resize(totalSize);
+  while (offset < totalSize + headerSize) {
+    n = this->_recievePart(this->rawMessage.data.data() + offset - headerSize, totalSize - (offset- headerSize));
+    if (n == -1)
+      return -1;
+    if (n == -2)
+      return 2;
+    if (n == 0)
+      return 1;
+    
+    offset += n;
+  }
+  msg.filename.clear();
+  msg.data.clear();
 
+  if (header.filenameSize != 0) {
+    msg.filename = std::string(this->rawMessage.data.data(), header.filenameSize);
+  }
+  msg.data = std::string(this->rawMessage.data.data() + header.filenameSize, header.dataSize);
+  this->rawMessageStarted = false;
   return 0;
 }
 
