@@ -13,8 +13,6 @@
 
 namespace fs = std::filesystem;
 
-//bool doPeerDiscovery = true;
-// TODO make a function which would display perror messages in UI
 
 std::atomic<bool> handleRequests = true;
 int epollFd;

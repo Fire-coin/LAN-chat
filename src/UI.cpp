@@ -9,7 +9,7 @@
 #include "socketFuncs.hpp"
 
 int ROWS, COLS;
-
+// TODO make an error queue and each UI function will call equivalent to perror after running outisde function
 std::string inputBuffer = "";
 bool updateScreen = false;
 bool displayChat = true;
@@ -40,6 +40,8 @@ void displayError(std::string error) {
   while (ch != 27) {
     ch = wgetch(win);
   }
+  wclear(win);
+  wrefresh(win);
 }
 
 void addMsg(std::string IP, Msg msg, int creator) {
@@ -49,9 +51,17 @@ void addMsg(std::string IP, Msg msg, int creator) {
     totalNotifications++;
     notificationMutex.unlock();
   }
+  
+  ChatMsg cMsg{};
+  cMsg.isFile = !msg.filename.empty();
+  if (cMsg.isFile)
+    cMsg.data = msg.filename;
+  else
+    cMsg.data = msg.data;
+  cMsg.creator = creator;
 
-  //std::pair<int, Msg> temp = std::pair<int, Msg>(creator, msg);
-  chatHistory[IP].emplace_back(creator, msg); //TODO maybe use emplace_back
+  // TODO add a mutex
+  chatHistory[IP].push_back(cMsg);
   updateScreen = true;
 }
 
@@ -68,24 +78,24 @@ void endUI() {
 
 // Inspired from https://invisible-island.net/ncurses/NCURSES-Programming-HOWTO.html#INIT 
 void displayChatLog(WINDOW* win, std::string IP) {
-  int x, y;
+  int x, y = 0;
   wclear(win);
-  // TODO add color to distinguish between peers
-  for (auto p : chatHistory[IP]) {
+  auto& curChat = chatHistory[IP];
+  for (auto it = curChat.begin(); it != curChat.end(); ++it) {
     getyx(win, y, x);
-    if (p.first == 0) {
-      if (p.second.filename == "") 
-        mvwprintw(win, y + 1, 0, "You have sent message: %s\n", p.second.data.c_str());
+    if (it->creator == 0) { // Message sent
+      if (!it->isFile) 
+        mvwprintw(win, y + 1, 0, "Message sent: %s\n", it->data.c_str());
       else
-        mvwprintw(win, y + 1, 0, "You have sent a file: %s\n", p.second.filename.c_str());
-    }
-    else {
-      if (p.second.filename == "")
-        mvwprintw(win, y + 1, 0, "Message recieved: %s\n", p.second.data.c_str());
+        mvwprintw(win, y + 1, 0, "File sent: %s\n", it->data.c_str());
+    } else { // Message recieved
+      if (!it->isFile)
+        mvwprintw(win, y + 1, 0, "Message recieved: %s\n", it->data.c_str());
       else
-        mvwprintw(win, y + 1, 0, "File recieved: %s\n", p.second.filename.c_str());
+        mvwprintw(win, y + 1, 0, "File recieved: %s\n", it->data.c_str());
     }
   }
+  // TODO add color to distinguish between peers
   notificationMutex.lock();
   totalNotifications -= notifications[IP];
   notifications[IP] = 0;
@@ -142,6 +152,7 @@ void displayChatScreen(std::string IP) {
         inputBuffer.erase(inputBuffer.size() - 1, 1); // Erase last character from buffer
         mvwdelch(inputWin, y, x - 1);
       }
+      // TODO screen does not update when selector window closes and whole chat stalls
       int index = inputBuffer.find(":file");
       if (index != inputBuffer.npos) {
         inputBuffer.erase(index, 5); // Erase the :file
@@ -168,6 +179,9 @@ void displayChatScreen(std::string IP) {
       refresh();
       displayChat = false;
     }
+
+    if (ch == '|')
+      displayError("Test error screen");
   }
   
   delete[] separator;

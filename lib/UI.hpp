@@ -19,8 +19,16 @@ extern std::string inputBuffer;
 extern bool updateScreen;
 extern bool displayChat;
 extern bool isInputReady;
+
+// The message which will be shown in chat (no need to store file contents if it is sent)
+struct ChatMsg {
+  bool isFile;
+  std::string data; // It is filename if isFile field is true, and message otherwise
+  int creator;
+};
+
 // A map that maps IP of peer to the chat history with that peer
-using IPToHistoryMap = std::unordered_map<std::string, std::vector<std::pair<int, Msg>>>;
+using IPToHistoryMap = std::unordered_map<std::string, std::vector<ChatMsg>>;
 extern IPToHistoryMap chatHistory;
 
 extern std::vector<std::string> homeScreenOptions;
