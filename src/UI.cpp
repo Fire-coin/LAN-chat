@@ -77,11 +77,18 @@ void endUI() {
 }
 
 // Inspired from https://invisible-island.net/ncurses/NCURSES-Programming-HOWTO.html#INIT 
-void displayChatLog(WINDOW* win, std::string IP) {
+void displayChatLog(WINDOW* win, std::string IP, uint32_t scrollIndex) {
   int x, y = 0;
   wclear(win);
+  if (chatHistory.find(IP) == chatHistory.end())
+    return;
   auto& curChat = chatHistory[IP];
-  for (auto it = curChat.begin(); it != curChat.end(); ++it) {
+  if (curChat.empty())
+    return;
+  if (scrollIndex > curChat.size() - 1)
+    scrollIndex = curChat.size() - 1;
+
+  for (auto it = curChat.begin() + scrollIndex; it != curChat.end(); ++it) {
     getyx(win, y, x);
     if (it->creator == 0) { // Message sent
       if (!it->isFile) 
@@ -105,15 +112,17 @@ void displayChatLog(WINDOW* win, std::string IP) {
 // TODO make the messages scrollable
 void displayChatScreen(std::string IP) {
   noecho();
-  halfdelay(1); // Check for request every 200 milliseconds that user does not type
   WINDOW* chatWin;
   WINDOW* inputWin;
   int ch;
+  uint32_t scrollIndex = 0;
+  halfdelay(1); // Check for request every 200 milliseconds that user does not type
 
 
   chatWin = newwin(ROWS - 3, COLS, 0, 0);
   inputWin = newwin(3, COLS, ROWS - 3, 0);
-  
+  keypad(inputWin, true);
+
   wclear(chatWin);
   wclear(inputWin);
 
@@ -131,7 +140,7 @@ void displayChatScreen(std::string IP) {
   wrefresh(inputWin);
   while (displayChat) {
     if (updateScreen) {
-      displayChatLog(chatWin, IP);
+      displayChatLog(chatWin, IP, scrollIndex);
       updateScreen = false;
     }
     
@@ -140,8 +149,8 @@ void displayChatScreen(std::string IP) {
       continue;
 
     // 127 is delete
-    if (ch >= ' ' && ch <= 127 && !isInputReady) {
-      if (ch != 127) {
+    if (ch >= ' ' && ch <= 126 && !isInputReady || ch == KEY_BACKSPACE) {
+      if (ch != KEY_BACKSPACE) {
         inputBuffer.append(reinterpret_cast<char*>(&ch));
         waddch(inputWin, ch);
       } else {
@@ -174,6 +183,19 @@ void displayChatScreen(std::string IP) {
       mvwprintw(inputWin, 0, 0, "%s", separator);
       wrefresh(inputWin);
     }
+    if (ch == KEY_UP) {
+      if (scrollIndex > 0) {
+        scrollIndex--;
+        updateScreen = true;
+      }
+    }
+    if (ch == KEY_DOWN) {
+      if (scrollIndex < chatHistory[IP].size()) {
+        scrollIndex++;
+        updateScreen = true;
+      }
+    }
+
     if (ch == 27) { // Escape
       clear();
       refresh();
@@ -237,6 +259,7 @@ int selector(std::vector<std::string>& options, WINDOW* win, int rows, int cols)
       case 27: // Escape
         wclear(win);
         wrefresh(win);
+        keypad(win, false);
         return -1;
       default:
         update = false;
@@ -351,6 +374,7 @@ std::string displayNewChatScreen() {
 
       wclear(optionWin);
       wrefresh(optionWin);
+      keypad(win, false);
       return out;
     }
     update = true;
@@ -464,6 +488,7 @@ bool displayConfirmWin(std::string question) {
         current = !current;
         break;
       case '\n':
+        keypad(win, false);
         return current;
     }
   }
@@ -644,10 +669,12 @@ std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
       case 10: // Enter key
         wclear(selectorWin);
         wrefresh(selectorWin);
+        keypad(win, false);
         return connectedPeers[current]->IP;
       case 27: // Escape
         wclear(selectorWin);
         wrefresh(selectorWin);
+        keypad(win, false);
         return "";
       default:
         update = false;
