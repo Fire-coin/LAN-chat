@@ -44,7 +44,9 @@ int processFile(std::string& filepath, Msg& msg) {
 
   return 0;
 }
-
+// <error>: file operation
+// <error>: absent peer 
+// <error>: epoll_ctl
 int sendMessage(std::string& IP, std::string& message) {
   Msg msg{};
   int index = message.find("$file=");
@@ -103,6 +105,8 @@ int recieve(ConnectionSock* socket, Msg& msg) {
 
 std::vector<ConnectionSock*> connectedSockets{};
 // from https://medium.com/@hajorda/non-blocking-sockets-and-i-o-multiplexing-with-epoll-in-c-bd3d8e54c20a
+// <error>: fcntl_F_GETFL
+// <error>: fcntl_F_SETFL
 int setNonblocking(int sockfd) {
     int flags = fcntl(sockfd, F_GETFL, 0);
     if (flags == -1) {
@@ -115,6 +119,7 @@ int setNonblocking(int sockfd) {
 }
 
 /* Handles both connection requests and recieving requests (user recieves data from other peers) */
+// <error>: bind socket
 void handlePeerRequests(int portNum) {
   epollFd = epoll_create1(0);
   if (epollFd == -1) {
@@ -154,7 +159,7 @@ void handlePeerRequests(int portNum) {
   
   while (handleRequests) {
     int newEvents = epoll_wait(epollFd, events, maxEvents, -1);
-
+    // <error>: epoll_wait
     if (newEvents == -1) {
       displayError("epoll_wait");
       return;
@@ -170,6 +175,7 @@ void handlePeerRequests(int portNum) {
             if (errno == EAGAIN || errno == EWOULDBLOCK)
               break;
             else {
+              // <error>: accept
               displayError("accept");
               return;
             }
@@ -202,34 +208,50 @@ void handlePeerRequests(int portNum) {
 
           connectedSockets.push_back(sock);
         }
-      } else { // There is a read available on a socket
-        // TODO check for events either EPOLLIN or EPOLLOUT
-        int clientFd = events[i].data.fd;
-        auto it = std::find_if(connectedSockets.begin(), connectedSockets.end(), [clientFd](ConnectionSock* sock) {return sock->clientfd == clientFd; });
-        if (it == connectedSockets.end()) {
-          displayError("Recieve request from non connected socket recieved");
-          continue;
-        }
-        Msg msg;
-        // TODO add check for closing file (returned size by recv(fd, ...) == 0)
-        int err;
-        do {
-          err = recieve(*it, msg);
-          // Other peer closed file descriptor
-          if (err == 2) { 
-            connectedSockets.erase(it);
-            // TODO make the removing peer code 
-            delete *it;
+      } else { // There is a read or write available on a socket
+        uint32_t curEvents = events[i].events;
+        if (curEvents & EPOLLIN) {
+          // TODO check for events either EPOLLIN or EPOLLOUT
+          int clientFd = events[i].data.fd;
+          auto it = std::find_if(connectedSockets.begin(), connectedSockets.end(), [clientFd](ConnectionSock* sock) {return sock->clientfd == clientFd; });
+          // <error>: impossible_error
+          if (it == connectedSockets.end()) {
+            displayError("Recieve request from non connected socket recieved");
+            continue;
+          }
+          Msg msg;
+          // TODO add check for closing file (returned size by recv(fd, ...) == 0)
+          int err;
+          do {
+            err = recieve(*it, msg);
+            // Other peer closed file descriptor
+            if (err == 2) { 
+              connectedSockets.erase(it);
+              // TODO make the removing peer code 
+              delete *it;
+            }
+          }
+          while (err == 1);
+          addMsg((*it)->getPeerIP(), msg, 1);
+        } else if (curEvents & EPOLLOUT) {
+          int clientFd = events[i].data.fd;
+          auto it = std::find_if(connectedSockets.begin(), connectedSockets.end(), [clientFd](ConnectionSock* sock) {return sock->clientfd == clientFd; });
+          if (it == connectedSockets.end()) {
+            displayError("Sent request on non connected socket");
+            continue;
+          }
+          int err = (*it)->send();
+          if (err == -1) {
+            displayError("Failed to send message");
+            break;
           }
         }
-        while (err == 1);
-        addMsg((*it)->getPeerIP(), msg, 1);
       }
     }
   }
   close(epollFd);
 }
-
+// <error>: peer offline
 void establishConnection(std::string& IPOrHost, int portNum) {
   // finding the peer to which user wants to connect in available peers
   auto it = std::find_if(currentPeers.begin(), currentPeers.end(), [&IPOrHost](Peer p) {return IPOrHost == p.IP; });
