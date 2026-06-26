@@ -25,6 +25,20 @@ std::vector<std::string> homeScreenOptions = {"New Chat", "Chats", "Change Nickn
 std::atomic<HOME_OPTIONS> selectedOption;
 
 
+int checkError() {
+  errorMutex.lock();
+  if (errorQueue.empty()) {
+    errorMutex.unlock();
+    return 0;
+  }
+  
+  LCError lce = errorQueue.front();
+  errorQueue.pop();
+  displayError(lce.message);
+  errorMutex.unlock();
+  return lce.errorCode;
+}
+
 void displayError(std::string error) {
   WINDOW* win;
   curs_set(0);
@@ -111,7 +125,7 @@ void displayChatLog(WINDOW* win, std::string IP, uint32_t scrollIndex) {
   notificationMutex.unlock();
   wrefresh(win); // To display it into real terminal
 }
-// TODO make the messages scrollable
+
 void displayChatScreen(std::string IP) {
   noecho();
   WINDOW* chatWin;
@@ -141,6 +155,10 @@ void displayChatScreen(std::string IP) {
   wprintw(inputWin, "%s", inputBuffer.c_str());
   wrefresh(inputWin);
   while (displayChat) {
+    if (checkError() != 0) {
+      while (checkError() != 0) {}
+      updateScreen = true;
+    }
     if (updateScreen) {
       displayChatLog(chatWin, IP, scrollIndex);
       updateScreen = false;
@@ -205,7 +223,7 @@ void displayChatScreen(std::string IP) {
     }
 
     if (ch == '|')
-      displayError("Test error screen");
+      pushError("Test error screen", -1);
   }
   
   delete[] separator;
@@ -266,6 +284,14 @@ int selector(std::vector<std::string>& options, WINDOW* win, int rows, int cols)
       default:
         update = false;
     }
+
+    if (ch == '|')
+      pushError("Test error screen", -1);
+    if (checkError() != 0) {
+      while (checkError() != 0) {}
+      update = true;
+    }
+
     if (update) {
       if (arrayBegin != current / rows) { // It does not fit into single window, scroll down
         arrayBegin = (current / rows) * rows; // should work, lazy to prove why
@@ -292,7 +318,6 @@ HOME_OPTIONS displayHomeScreen() {
   int x, y;
   
   getyx(stdscr, y, x);
-  // TODO use map of WINDOW* and std::string to store windows and just refresh them
   WINDOW* homeWin;
   WINDOW* optionWin;
   
@@ -305,6 +330,7 @@ HOME_OPTIONS displayHomeScreen() {
   wrefresh(homeWin);
   auto hso = homeScreenOptions;
   notificationMutex.lock();
+  // TODO make this screen also refresh dynamically
   if (totalNotifications > 0) {
     hso[1] += " {";
     hso[1] += std::to_string(totalNotifications);
@@ -400,7 +426,10 @@ std::string displayNewChatScreen() {
       default:
         update = false;
     }
-    
+    if (checkError() != 0) {
+      while (checkError() != 0) {}
+      update = true;
+    }
     if (update) {
       for (int i = 0; i < currentPeers.size(); ++i) {
         mvwprintw(optionWin, i, 1, " ");
@@ -524,6 +553,13 @@ std::string displayChangeNicknameScreen(std::string curNick) {
   halfdelay(1);
   int ch;
   while (1) {
+    if (checkError() != 0) {
+      while (checkError() != 0) {}
+      box(nickWin, 0, 0);
+      wprintw(textWin, "Your nickname\n");
+      mvwprintw(nickWin, 1, 1, "%s", curNick.c_str());
+    }
+
     ch = wgetch(nickWin);
     
     if (ch == ERR)
@@ -626,7 +662,10 @@ std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
         }
       }
     }
-
+    if (checkError() != 0) {
+      while (checkError() != 0) {}
+      updateWhole = true;
+    }
     if (updateWhole) {
       if (options.size() == 0) {
         wclear(selectorWin);
