@@ -2,6 +2,7 @@
 #include "socket.hpp"
 #include "fileFuncs.hpp"
 #include "socketFuncs.hpp"
+#include "appErrors.hpp"
 #include <future> // std::future
 #include <thread> // std::async
 #include <ifaddrs.h> // getifaddr, getnameinfo
@@ -20,14 +21,13 @@ std::vector<Peer*> connectedPeers;
 
 
 std::atomic<bool> doPeerDiscovery = true;
-
-// TODO abolish async and use threads because these do not return anything
+// TODO get rid of async and use epoll for these ones also (maybe)
 void discoverPeers(int portNum) {
   UDPDiscoverySock uSock = UDPDiscoverySock();
 
   if (uSock.bind(portNum) < 0) {
-    appError("Discovery socket binding failure");
-    perror("");
+    pushError("Discovery socket binding failure", LCE_BIND);
+    return;
   }
 
   std::vector<std::string> IPs = getMachineIPs();
@@ -59,8 +59,8 @@ void discoverPeers(int portNum) {
       isSendingPacket = false;
       int SendError = packetSendError.get();
       if (SendError < 0) {
-        appError("Error while sending over UDP socket");
-        perror("");
+        pushError("Error while sending over UDP socket", LCE_SEND);
+        continue;
       }
     }
     // TODO make this part more unnested, cause its pain to look at 
@@ -72,31 +72,33 @@ void discoverPeers(int portNum) {
     auto recvStatus = packetRecvError.wait_for(std::chrono::milliseconds(0));
 
     if (recvStatus == std::future_status::ready) {
-      isRecievingPacket = false;
       int recvError = packetRecvError.get();
+      if (recvError == LCE_SEND) {
+        pushError("Error while recieving UDP packet", recvError);
+        continue;
+      }
+      if (recvError == LCE_BAD_PACKET) {
+        continue;
+      }
+
+      isRecievingPacket = false;
       discoverMutex.lock();
-      if (recvError < 0) {
-        if (recvError == -1) {
-          appError("Error while recieving UDP packet");
-          perror("");
+      auto it = find_if(currentPeers.begin(), currentPeers.end(), [IP](Peer& peer) { return peer.IP == IP; });
+      if (it == currentPeers.end()) {
+        // Ignore if IP is one of the machine ones
+        if (find_if(IPs.begin(), IPs.end(), [IP](std::string& ip) {return ip == IP; }) == IPs.end()) {
+          Peer p;
+          p.IP = IP;
+          p.nickname = nickname;
+          p.lastSeen = std::chrono::steady_clock::now();
+          
+          currentPeers.push_back(p);
         }
       } else {
-        auto it = find_if(currentPeers.begin(), currentPeers.end(), [IP](Peer& peer) { return peer.IP == IP; });
-        if (it == currentPeers.end()) {
-          // Ignore if IP is one of the machine ones
-          if (find_if(IPs.begin(), IPs.end(), [IP](std::string& ip) {return ip == IP; }) == IPs.end()) {
-            Peer p;
-            p.IP = IP;
-            p.nickname = nickname;
-            p.lastSeen = std::chrono::steady_clock::now();
-            
-            currentPeers.push_back(p);
-          }
-        } else {
-          it->lastSeen = std::chrono::steady_clock::now();
-          it->nickname = nickname;
-        }
+        it->lastSeen = std::chrono::steady_clock::now();
+        it->nickname = nickname;
       }
+     
       // TODO delete peers which went offline from connectedPeers
       // Scan if some of the peers are offline
       for (auto it = currentPeers.begin(); it != currentPeers.end();) {
@@ -129,7 +131,7 @@ std::vector<std::string> getMachineIPs() {
   char host[NI_MAXHOST];
 
   if (getifaddrs(&ifaddr) == -1)
-    perror("getifaddrs");
+    pushError("getifaddrs", LCE_SYS_CALL);
   
   for (struct ifaddrs *ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
     if (ifa->ifa_addr == NULL)
@@ -143,7 +145,7 @@ std::vector<std::string> getMachineIPs() {
       if (s != 0) {
         std::string msg = "getnameinfo failed: ";
         msg.append(gai_strerror(s));
-        appError(msg);
+        pushError(msg, LCE_SYS_CALL);
       }
       if (std::string(host) != "127.0.0.1")
         IPs.push_back(std::string(host));

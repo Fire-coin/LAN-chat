@@ -1,6 +1,7 @@
 #include "socketFuncs.hpp"
 #include "fileFuncs.hpp" // file handling
 #include "UI.hpp" // To set global variables
+#include "appErrors.hpp"
 #include <future> // std::future
 #include <thread> // std::this_thread::sleep_for
 #include <filesystem>
@@ -24,8 +25,8 @@ int processFile(std::string& filepath, Msg& msg) {
   std::fstream file;
 
   error = handleFile(filepath, file); // Opening the file and handling errors
-  if (error > 0)
-    return -1; // Error with file
+  if (error < 0)
+    return error; // Error with file
   filename = getFilename(filepath);
   msg.filename = filename;
 
@@ -44,9 +45,6 @@ int processFile(std::string& filepath, Msg& msg) {
 
   return 0;
 }
-// <error>: file operation
-// <error>: absent peer 
-// <error>: epoll_ctl
 int sendMessage(std::string& IP, std::string& message) {
   Msg msg{};
   int index = message.find("$file=");
@@ -56,29 +54,36 @@ int sendMessage(std::string& IP, std::string& message) {
     // TODO make filename structure be $file={<filepath>}
     std::string filepath = std::string(message.begin() + index + 6, message.end()); // We add + 6 bytes to start from the filepath
     int err = processFile(filepath, msg);
-    if (err == -1)
-      return 4;
+    if (err < 0)
+      return err;
   }
   message = "";
 
 
   // Find peer with this IP
   auto it = std::find_if(connectedSockets.begin(), connectedSockets.end(), [&IP](ConnectionSock* s) {return IP == s->getPeerIP(); });
-  if (it == connectedSockets.end())
-    return 1; // Peer is not connected
+  if (it == connectedSockets.end()) {
+      pushError("Peer is not connected", LCE_PEER_OFFLINE);
+      return LCE_ALREADY_REPORTED; // Peer is not connected
+    }
 
   int err = (*it)->sendMsg(msg);
-  if (err == -1)
-    return -1; // epoll_ctl
+  if (err == LCE_SEND) {
+    pushError("Error sending message", LCE_SEND);
+    return LCE_ALREADY_REPORTED;
+  }
+  if (err == LCE_EPOLL_CTL) {
+    pushError("Error with epoll_ctl: sendMessage", LCE_EPOLL_CTL);
+    return LCE_ALREADY_REPORTED;
+  }
 
-  // TODO add historyMsg struct for history, and use Msg to communicate with socket classes instead of strings
   addMsg(IP, msg, 0);
   return 0;
 }
 
 int recieve(ConnectionSock* socket, Msg& msg) {
   int n = socket->recieve(msg);
-  if (n != 0)
+  if (n < 0)
     return n;
 
   if (msg.filename == "")  // Plain message
@@ -95,7 +100,7 @@ int recieve(ConnectionSock* socket, Msg& msg) {
   dirName.append(msg.filename);
   std::fstream file(dirName, std::fstream::out | std::fstream::binary);
   if (!file.is_open())
-    return 4; // Error with file
+    return LCE_FILE_OP; // Error with file
   
   file.write(msg.data.data(), msg.data.size());
   file.close();
@@ -105,42 +110,38 @@ int recieve(ConnectionSock* socket, Msg& msg) {
 
 std::vector<ConnectionSock*> connectedSockets{};
 // from https://medium.com/@hajorda/non-blocking-sockets-and-i-o-multiplexing-with-epoll-in-c-bd3d8e54c20a
-// <error>: fcntl_F_GETFL
-// <error>: fcntl_F_SETFL
 int setNonblocking(int sockfd) {
     int flags = fcntl(sockfd, F_GETFL, 0);
     if (flags == -1) {
-        return 1;
+      pushError("fcntl: F_GETFL; setNonblocking", LCE_FCNTL);
+      return LCE_ALREADY_REPORTED;
     }
     if (fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) == -1) {
-        return 2;
+      pushError("fcntl: F_SETFL; setNonblocking", LCE_FCNTL);
+      return LCE_ALREADY_REPORTED;
     }
     return 0;
 }
 
 /* Handles both connection requests and recieving requests (user recieves data from other peers) */
-// <error>: bind socket
+//TODO make the return statement exit the app
 void handlePeerRequests(int portNum) {
   epollFd = epoll_create1(0);
   if (epollFd == -1) {
-    displayError("epoll_create1");
+    pushError("epoll_create1", LCE_EPOLL_CREATE);
     return;
   }
 
   MonitorSock monSock = MonitorSock(epollFd);
 
-  if (monSock.bind(portNum))
-      displayError("Error binding monitoring socket");
+  if (monSock.bind(portNum) < 0) {
+      pushError("Error binding monitoring socket", LCE_BIND);
+      return;
+  }
   
   int err = setNonblocking(monSock.serverfd);
-  if (err == 1) {
-    displayError("fcntl(F_GETFL)");
+  if (err < 0)
     return;
-  }
-  if (err == 2) {
-    displayError("fcntl(F_SETFL)");
-    return;
-  }
 
   monSock.listen();
 
@@ -150,7 +151,7 @@ void handlePeerRequests(int portNum) {
   event.data.fd = monSock.serverfd;
   
   if (epoll_ctl(epollFd, EPOLL_CTL_ADD, monSock.serverfd, &event) == -1) {
-    displayError("epoll_ctl: serverfd");
+    pushError("epoll_ctl: serverfd; handlePeerRequests", LCE_EPOLL_CTL);
     return;
   }
 
@@ -159,9 +160,8 @@ void handlePeerRequests(int portNum) {
   
   while (handleRequests) {
     int newEvents = epoll_wait(epollFd, events, maxEvents, -1);
-    // <error>: epoll_wait
     if (newEvents == -1) {
-      displayError("epoll_wait");
+      pushError("epoll_wait", LCE_EPOLL_WAIT);
       return;
     }
     
@@ -170,23 +170,17 @@ void handlePeerRequests(int portNum) {
       if (events[i].data.fd == monSock.serverfd) {
         while (1) {
           ConnectionSock* sock = monSock.accept(); 
-          if (sock->clientfd == -1) {
+          if (!sock->exists()) {
             // All incoming connections have been processed
             if (errno == EAGAIN || errno == EWOULDBLOCK)
               break;
             else {
-              // <error>: accept
-              displayError("accept");
+              pushError("accept", LCE_ACCEPT);
               return;
             }
           }
           int err = setNonblocking(sock->clientfd);
-          if (err == 1) {
-            displayError("fcntl(F_GETFL)");
-            return;
-          }
-          if (err == 2) {
-            displayError("fcntl(F_SETFL)");
+          if (err < 0) {
             return;
           }
 
@@ -194,7 +188,7 @@ void handlePeerRequests(int portNum) {
           event.data.fd = sock->clientfd;
           // Adding new peer for monitoring by epoll
           if (epoll_ctl(epollFd, EPOLL_CTL_ADD, sock->clientfd, &event) == -1) {
-            displayError("epoll_ctl: clientFd");
+            pushError("epoll_ctl: clientFd; handlePeerRequests", LCE_EPOLL_CTL);
             sock->close();
             continue;
           }
@@ -211,12 +205,10 @@ void handlePeerRequests(int portNum) {
       } else { // There is a read or write available on a socket
         uint32_t curEvents = events[i].events;
         if (curEvents & EPOLLIN) {
-          // TODO check for events either EPOLLIN or EPOLLOUT
           int clientFd = events[i].data.fd;
           auto it = std::find_if(connectedSockets.begin(), connectedSockets.end(), [clientFd](ConnectionSock* sock) {return sock->clientfd == clientFd; });
-          // <error>: impossible_error
           if (it == connectedSockets.end()) {
-            displayError("Recieve request from non connected socket recieved");
+            pushError("Recieve request from non connected socket recieved", LCE_IMPOSSIBLE);
             continue;
           }
           Msg msg;
@@ -224,26 +216,36 @@ void handlePeerRequests(int portNum) {
           int err;
           do {
             err = recieve(*it, msg);
-            // Other peer closed file descriptor
-            if (err == 2) { 
-              connectedSockets.erase(it);
-              // TODO make the removing peer code 
-              delete *it;
-            }
           }
-          while (err == 1);
+          while (err == LCE_NOT_FULL_MSG);
+          // Other peer closed file descriptor
+          if (err == LCE_FD_CLOSED) { 
+            connectedSockets.erase(it);
+            // TODO make the removing peer code 
+            delete *it;
+          }
+          // TODO not sure to show user this message or not
+          if (err == LCE_RECIEVE) {
+            continue;
+          }
+
           addMsg((*it)->getPeerIP(), msg, 1);
+
         } else if (curEvents & EPOLLOUT) {
           int clientFd = events[i].data.fd;
           auto it = std::find_if(connectedSockets.begin(), connectedSockets.end(), [clientFd](ConnectionSock* sock) {return sock->clientfd == clientFd; });
           if (it == connectedSockets.end()) {
-            displayError("Sent request on non connected socket");
+            pushError("Sent request on non connected socket", LCE_SEND);
             continue;
           }
           int err = (*it)->send();
-          if (err == -1) {
-            displayError("Failed to send message");
-            break;
+          if (err == LCE_SEND) {
+            pushError("Failed to send message", err);
+            continue;
+          }
+          if (err == LCE_EPOLL_CTL) {
+            pushError("epoll_ctl; handlePeerRequests from ConnectionSock::send", err);
+            return;
           }
         }
       }
@@ -251,12 +253,11 @@ void handlePeerRequests(int portNum) {
   }
   close(epollFd);
 }
-// <error>: peer offline
 void establishConnection(std::string& IPOrHost, int portNum) {
   // finding the peer to which user wants to connect in available peers
   auto it = std::find_if(currentPeers.begin(), currentPeers.end(), [&IPOrHost](Peer p) {return IPOrHost == p.IP; });
   if (it == currentPeers.end()) {
-    displayError("Selected peer is not online");
+    pushError("Selected peer is not online", LCE_PEER_OFFLINE);
     return;
   }
 
@@ -265,26 +266,26 @@ void establishConnection(std::string& IPOrHost, int portNum) {
 
   ConnectionSock* sock = new ConnectionSock(IPOrHost, std::to_string(portNum), epollFd);
   if (!sock->exists()) {
-    displayError("Error establishing connection: ConnectionSock does not exist");
+    pushError("Error establishing connection: ConnectionSock does not exist", LCE_CONNECTION_SOCK);
+    return;
+  }
+  int err = sock->connect();
+  if (err < 0) {
+    pushError("Could not connect; establishConnection", err);
     return;
   }
   
   struct epoll_event event;
-  int err = setNonblocking(sock->clientfd);
-  if (err == 1) {
-    displayError("fcntl(F_GETFL)");
+  err = setNonblocking(sock->clientfd);
+  if (err < 0)
     return;
-  }
-  if (err == 2) {
-    displayError("fcntl(F_SETFL)");
-    return;
-  }
+
   event.events = EPOLLIN | EPOLLET;
   event.data.fd = sock->clientfd;
 
 
   if (epoll_ctl(epollFd, EPOLL_CTL_ADD, sock->clientfd, &event) == -1) {
-    displayError("Error connecting to socket: epoll_ctl, clientfd");
+    pushError("Error connecting to socket: epoll_ctl, clientfd; establishConnection", LCE_EPOLL_CTL);
     sock->close();
     return;
   }

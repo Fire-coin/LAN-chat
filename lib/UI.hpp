@@ -34,6 +34,7 @@ extern IPToHistoryMap chatHistory;
 extern std::vector<std::string> homeScreenOptions;
 
 void displayError(std::string error);
+int checkError();
 
 extern std::mutex notificationMutex;
 extern std::unordered_map<std::string, int> notifications; // How many messages (int) recieved from other peer IP (std::string)

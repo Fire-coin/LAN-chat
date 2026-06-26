@@ -2,6 +2,7 @@
 #include "peer.hpp"
 #include "formatString.hpp"
 #include "fileSelector.hpp"
+#include "appErrors.hpp"
 #include <ncurses.h>
 #include <cstring> // memset
 #include <algorithm>
@@ -22,6 +23,7 @@ int totalNotifications = 0;
 
 std::vector<std::string> homeScreenOptions = {"New Chat", "Chats", "Change Nickname", "Exit"};
 std::atomic<HOME_OPTIONS> selectedOption;
+
 
 void displayError(std::string error) {
   WINDOW* win;

@@ -61,7 +61,8 @@ class ConnectionSock {
   ConnectionSock() : clientfd(-1) {};
   ConnectionSock(int cfd, std::string& IPOrHost, int epollFd);
   ConnectionSock(std::string& IPOrHost, std::string port, int epollFd); 
-
+  
+  int connect();
   int sendMsg(Msg& msg);
   int send();
   int sendFile(std::fstream& file, std::string& filename);

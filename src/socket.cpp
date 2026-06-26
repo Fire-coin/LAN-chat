@@ -1,7 +1,7 @@
 #include "socket.hpp"
+#include "appErrors.hpp"
 #include <cstring> // memset
 #include <unistd.h> // close
-#include <stdlib.h> // perror
 #include <sys/types.h> 
 #include <netdb.h>
 #include <iostream>
@@ -17,20 +17,19 @@
 
 
 //TODO GLOBALLY put htonl, htons and custom one for 8 bytes everywhere when sending port numbers and numbers
-
+/* User should always check socket if exists() method */
 UDPDiscoverySock::UDPDiscoverySock() {
   this->sockFd = socket(AF_INET, SOCK_DGRAM, 0);
   const int enable = 1;
-  // TODO add error checking here
   setsockopt(this->sockFd, SOL_SOCKET, SO_BROADCAST, &enable, sizeof(int));
   setsockopt(this->sockFd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
   memset(&this->broadcastAddr, 0, sizeof(this->broadcastAddr));
 }
 
+/* User should always check socket if exists() method */
 UDPDiscoverySock::UDPDiscoverySock(std::string nickname) {
   this->sockFd = socket(AF_INET, SOCK_DGRAM, 0);
   const int enable = 1;
-  // TODO add error checking here
   setsockopt(this->sockFd, SOL_SOCKET, SO_BROADCAST, &enable, sizeof(int));
   setsockopt(this->sockFd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
   memset(&this->broadcastAddr, 0, sizeof(this->broadcastAddr));
@@ -50,7 +49,9 @@ int UDPDiscoverySock::bind(int portNum) {
   this->transmitAddr.sin_port = htons(portNum);
   this->transmitAddr.sin_addr.s_addr = INADDR_ANY;
 
-  return ::bind(this->sockFd, (struct sockaddr* ) &this->transmitAddr, sizeof(this->transmitAddr));
+  if (::bind(this->sockFd, (struct sockaddr* ) &this->transmitAddr, sizeof(this->transmitAddr)) == -1)
+    return LCE_BIND;
+  return 0;
 }
 
 
@@ -67,6 +68,8 @@ int UDPDiscoverySock::sendPresence(int delay) {
   
   int n = sendto(this->sockFd, message.data(), message.size(), 0, (struct sockaddr*) &this->broadcastAddr, broadcastLen);
   std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+  if (n == -1)
+    return LCE_SEND;
   return n;
 }
 
@@ -78,21 +81,23 @@ int UDPDiscoverySock::recievePacket(std::string& senderIP, std::string& nickname
   std::string msg(buffer.data(), n);
   std::stringstream ss(msg);
   if (msg.find_first_of('|', 0) == msg.npos)
-    return -2;
+    return LCE_BAD_PACKET;
   std::string appVer, nick, port;
   std::getline(ss, appVer, '|');
   if (appVer != "LAN-chat")
-    return -2;
+    return LCE_BAD_PACKET;
   std::getline(ss, nick, '|');
   std::getline(ss, port, '|');
   if (port != std::to_string(this->portNum))
-    return -2;
+    return LCE_BAD_PACKET;
 
   // TODO add check to see if the packet arrived from the other LAN-chat Peer
   // TODO also add nickname separation from packet
   senderIP = inet_ntoa(this->senderAddr.sin_addr);
   nickname = nick;
   std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+  if (n == -1)
+    return LCE_SEND;
   return n;
 }
 // TODO add checking for max length of nickname
@@ -100,6 +105,7 @@ void UDPDiscoverySock::changeNickname(std::string newNickname) {
   this->nickname = newNickname;
 }
 
+/* User should always check socket with exists() method */
 MonitorSock::MonitorSock(int epollFd) {
   this->epollFd = epollFd;
   // IPv4 TCP socket
@@ -112,8 +118,11 @@ int MonitorSock::bind(int portNum) {
   serverAddr.sin_family = AF_INET; // IPv4
   serverAddr.sin_port = htons(portNum);
   serverAddr.sin_addr.s_addr = INADDR_ANY; // Any addres
-  
-  return ::bind(this->serverfd, (struct sockaddr* ) &serverAddr, sizeof(serverAddr));
+
+  if (::bind(this->serverfd, (struct sockaddr* ) &serverAddr, sizeof(serverAddr)) == -1) {
+    return LCE_BIND;
+  }
+  return 0;
 }
 
 void MonitorSock::listen() {
@@ -142,6 +151,7 @@ bool MonitorSock::exists() {
   return !(this->serverfd < 0);
 }
 
+/* User should always check socket with exists() method */
 ConnectionSock::ConnectionSock(int cfd, std::string& IPOrHost, int epollFd) {
   this->clientfd = cfd;
   this->IPOrHost = IPOrHost;
@@ -150,14 +160,16 @@ ConnectionSock::ConnectionSock(int cfd, std::string& IPOrHost, int epollFd) {
 }
 
 ConnectionSock::ConnectionSock(std::string& IPOrHost, std::string port, int epollFd) {
-  struct addrinfo  hints;
-  struct addrinfo  *result, *rp;
-  int s;
-  
   this->port = port;
   this->IPOrHost = IPOrHost;
   this->isEpollout = false;
   this->epollFd = epollFd;
+}
+
+int ConnectionSock::connect() {
+  struct addrinfo  hints;
+  struct addrinfo  *result, *rp;
+  int s;
 
   memset(&hints, 0, sizeof(hints));
 
@@ -166,8 +178,9 @@ ConnectionSock::ConnectionSock(std::string& IPOrHost, std::string port, int epol
   hints.ai_flags = 0;
   hints.ai_protocol = 0;
   s =  getaddrinfo(IPOrHost.c_str(), port.c_str(), &hints, &result);
-  if (s < 0)
-    perror("Error while creating Connection socket");
+  if (s != 0) {
+    return LCE_CONNECT;
+  }
 
 
   for (rp = result; rp != NULL; rp = rp->ai_next) {
@@ -175,7 +188,7 @@ ConnectionSock::ConnectionSock(std::string& IPOrHost, std::string port, int epol
     if (this->clientfd == -1)
       continue;
 
-    if (connect(this->clientfd , rp->ai_addr, rp->ai_addrlen) != -1)
+    if (::connect(this->clientfd , rp->ai_addr, rp->ai_addrlen) != -1)
       break;                  /* Success */
 
     ::close(this->clientfd);
@@ -184,9 +197,9 @@ ConnectionSock::ConnectionSock(std::string& IPOrHost, std::string port, int epol
   freeaddrinfo(result);
 
   if (rp == NULL)
-    fprintf(stderr, "Could not connect\n");
+    return LCE_CONNECT;
+  return 0;
 }
-
 
 int ConnectionSock::_sendPart(void* buffer, uint64_t length) {
   uint64_t transmitted = 0;
@@ -197,7 +210,7 @@ int ConnectionSock::_sendPart(void* buffer, uint64_t length) {
       if (errno == EAGAIN)
         return 0;
 
-      return -1;
+      return LCE_SEND;
     }
     transmitted += n;
   }
@@ -220,6 +233,8 @@ int ConnectionSock::send() {
   uint64_t msgSize = message.size();
 
   int64_t n = this->_sendPart(message.data() + offset, msgSize - offset);
+  if (n < 0)
+    return n;
   
   // Whole message was sent
   if (offset + n == msgSize) {
@@ -232,7 +247,9 @@ int ConnectionSock::send() {
       event.data.fd = this->clientfd;
       
       msgBufferMutex.unlock();
-      return epoll_ctl(this->epollFd, EPOLL_CTL_MOD, this->clientfd, &event);
+      if (epoll_ctl(this->epollFd, EPOLL_CTL_MOD, this->clientfd, &event) == -1)
+        return LCE_EPOLL_CTL;
+      return 0;
     }
     // Call to send another message until either buffer is empty or send buffer is full
     msgBufferMutex.unlock();
@@ -248,7 +265,9 @@ int ConnectionSock::send() {
     event.data.fd = this->clientfd;
     
     msgBufferMutex.unlock();
-    return epoll_ctl(this->epollFd, EPOLL_CTL_MOD, this->clientfd, &event);
+    if(epoll_ctl(this->epollFd, EPOLL_CTL_MOD, this->clientfd, &event) == -1)
+      return LCE_EPOLL_CTL;
+    return 0;
   }
 
   msgBufferMutex.unlock();
@@ -282,7 +301,7 @@ int ConnectionSock::_recievePart(void* buffer, uint64_t length) {
   while (recieved < length) {
     n = recv(this->clientfd, static_cast<char*>(buffer) + recieved, length - recieved, 0);
     if (n == 0) 
-      return -2; // Indicates that file descriptor was closed
+      return LCE_FD_CLOSED; // Indicates that file descriptor was closed
                 
     if (n == -1) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -290,7 +309,7 @@ int ConnectionSock::_recievePart(void* buffer, uint64_t length) {
         return recieved;
       }
       // If errno was not EAGAIN, an error has occured
-      return -1;
+      return LCE_RECIEVE;
     }
     recieved += n;
   }
@@ -315,15 +334,12 @@ int ConnectionSock::recieve(Msg& msg) {
   // Recieve header info
   while (offset < headerSize) {
     n = this->_recievePart((char*)&header + offset, headerSize - offset);
-    //displayError(std::to_string(header.dataSize) + " " + std::to_string(header.filenameSize) + "\n" + std::to_string(offset) + " " + std::to_string(n));
-    if (n == -1) 
-      return -1;
-    if (n == -2)
-      return 2;
-    if (n == 0)
-      return 1;
-
+    if (n < 0)
+      return n;
+    
     offset += n;
+    if (offset < headerSize)
+      return LCE_NOT_FULL_MSG;
   }
   // Am I sure this isnt Java?
   int64_t totalSize = header.filenameSize + header.dataSize;
@@ -331,14 +347,12 @@ int ConnectionSock::recieve(Msg& msg) {
     this->rawMessage.data.resize(totalSize);
   while (offset < totalSize + headerSize) {
     n = this->_recievePart(this->rawMessage.data.data() + offset - headerSize, totalSize - (offset- headerSize));
-    if (n == -1)
-      return -1;
-    if (n == -2)
-      return 2;
-    if (n == 0)
-      return 1;
-    
+    if (n < 0)
+      return n;
+
     offset += n;
+    if (offset < totalSize + headerSize)
+      return LCE_NOT_FULL_MSG;
   }
   msg.filename.clear();
   msg.data.clear();
