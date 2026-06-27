@@ -15,6 +15,7 @@ bool updateScreen = false;
 bool displayChat = true;
 std::atomic<bool> showUI = true;
 IPToHistoryMap chatHistory;
+std::mutex chatHistoryMutex;
 
 std::mutex notificationMutex;
 std::unordered_map<std::string, int> notifications;
@@ -60,6 +61,7 @@ void displayError(std::string error) {
 }
 
 void addMsg(std::string IP, Msg msg, int creator) {
+  chatHistoryMutex.lock();
   if (creator == 1) { // A message recieved
     notificationMutex.lock();
     notifications[IP]++;
@@ -75,9 +77,9 @@ void addMsg(std::string IP, Msg msg, int creator) {
     cMsg.data = msg.data;
   cMsg.creator = creator;
 
-  // TODO add a mutex
   chatHistory[IP].push_back(cMsg);
   updateScreen = true;
+  chatHistoryMutex.unlock();
 }
 
 void beginUI() {
@@ -95,11 +97,16 @@ void endUI() {
 void displayChatLog(WINDOW* win, std::string IP, uint32_t scrollIndex) {
   int x, y = 0;
   wclear(win);
-  if (chatHistory.find(IP) == chatHistory.end())
+  chatHistoryMutex.lock();
+  if (chatHistory.find(IP) == chatHistory.end()) {
+    chatHistoryMutex.unlock();
     return;
+  }
   auto& curChat = chatHistory[IP];
-  if (curChat.empty())
+  if (curChat.empty()) {
+    chatHistoryMutex.unlock();
     return;
+  }
   if (scrollIndex > curChat.size() - 1)
     scrollIndex = curChat.size() - 1;
 
@@ -123,6 +130,7 @@ void displayChatLog(WINDOW* win, std::string IP, uint32_t scrollIndex) {
   notifications[IP] = 0;
   notificationMutex.unlock();
   wrefresh(win); // To display it into real terminal
+  chatHistoryMutex.unlock();
 }
 
 void displayChatScreen(std::string IP) {
@@ -210,10 +218,12 @@ void displayChatScreen(std::string IP) {
       }
     }
     if (ch == KEY_DOWN) {
+      chatHistoryMutex.lock();
       if (scrollIndex < chatHistory[IP].size()) {
         scrollIndex++;
         updateScreen = true;
       }
+      chatHistoryMutex.unlock();
     }
 
     if (ch == 27) { // Escape

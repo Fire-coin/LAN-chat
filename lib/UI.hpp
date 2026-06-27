@@ -29,6 +29,7 @@ struct ChatMsg {
 // A map that maps IP of peer to the chat history with that peer
 using IPToHistoryMap = std::unordered_map<std::string, std::vector<ChatMsg>>;
 extern IPToHistoryMap chatHistory;
+extern std::mutex chatHistoryMutex;
 
 extern std::vector<std::string> homeScreenOptions;
 
