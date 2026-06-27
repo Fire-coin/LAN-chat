@@ -12,6 +12,7 @@ int _sendFile(ConnectionSock* socket, std::string filepath);
 int recieve(ConnectionSock& socket, std::string& message);
 
 
+int endRequestHandling();
 int setNonblocking(int sockfd);
 int processFile(std::string& filepath, Msg& msg);
 void establishConnection(std::string& IPOrHost, int portNum);
@@ -20,9 +21,6 @@ extern std::atomic<bool> handleRequests;
 extern int epollFd;
 
 extern std::vector<ConnectionSock*> connectedSockets;
-// TODO set all global vaiables to false before exiting
-// Global variables used to control async processes
-
 
 #endif
 #pragma once

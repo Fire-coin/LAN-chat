@@ -60,6 +60,7 @@ int main() {
         handleRequests = false;
         doPeerDiscovery = false;
         showUI = false;
+        endRequestHandling();
         break;
     }
   }

@@ -73,7 +73,7 @@ int UDPDiscoverySock::sendPresence(int delay) {
   return n;
 }
 
-
+// TODO make the port be dynamic and as another argument
 int UDPDiscoverySock::recievePacket(std::string& senderIP, std::string& nickname, int delay) {
   std::vector<char> buffer(MAX_UDP_PACKET_SIZE);
   socklen_t senderLen = sizeof(this->senderAddr);
@@ -112,7 +112,7 @@ MonitorSock::MonitorSock(int epollFd) {
   this->serverfd = socket(AF_INET, SOCK_STREAM, 0);
   memset(&serverAddr, 0, sizeof(serverAddr));
 }
-
+// TODO make binding through range of ports until one is suitable
 int MonitorSock::bind(int portNum) {
   this->port = portNum;
   serverAddr.sin_family = AF_INET; // IPv4

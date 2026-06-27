@@ -10,7 +10,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <iostream>
-
+#include <sys/eventfd.h>
 
 namespace fs = std::filesystem;
 
@@ -18,6 +18,19 @@ namespace fs = std::filesystem;
 std::atomic<bool> handleRequests = true;
 int epollFd;
 
+int endRequestHandling() {
+  int efd = eventfd(0, EFD_NONBLOCK);
+  if (efd == -1)
+    return -1;
+  struct epoll_event event;
+  event.events = EPOLLIN;
+  event.data.fd = efd;
+
+  epoll_ctl(epollFd, EPOLL_CTL_ADD, efd, &event);
+  uint64_t u = 1;
+  write(efd, &u, sizeof(u));
+  return 0;
+}
 
 int processFile(std::string& filepath, Msg& msg) {
   int error = 0;
