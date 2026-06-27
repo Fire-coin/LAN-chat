@@ -4,6 +4,9 @@
 #include <string>
 #include <fstream>
 #include <vector>
+#include "socket.hpp"
+
+int savePeerFile(std::string dirName, Msg& msg);
 
 void appError(std::string msg);
 

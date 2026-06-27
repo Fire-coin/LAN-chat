@@ -89,21 +89,13 @@ int recieve(ConnectionSock* socket, Msg& msg) {
   if (msg.filename == "")  // Plain message
    return 0;
   
-  // TODO make a function for this in fileFuncs.cpp
-  // Create a file in LAN-chat directory
-  std::string dirName = ".LAN-chat_files";
-  fs::path dirPath = fs::current_path() / dirName;
-  if (!fs::is_directory(dirPath))
-   fs::create_directory(dirPath);
-  
-  dirName.append("/");
-  dirName.append(msg.filename);
-  std::fstream file(dirName, std::fstream::out | std::fstream::binary);
-  if (!file.is_open())
-    return LCE_FILE_OP; // Error with file
-  
-  file.write(msg.data.data(), msg.data.size());
-  file.close();
+  int err = savePeerFile(".LAN-chat_files", msg);
+
+  if (err == LCE_FILE_OP) {
+    pushError("Problem writing a file; recieve", err);
+    return LCE_ALREADY_REPORTED;
+  }
+
   return 0; // File was written succesfully
 }
 

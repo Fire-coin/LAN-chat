@@ -7,6 +7,25 @@
 
 namespace fs = std::filesystem;
 
+/* Saves file contents from msg, into provided directory dirName */
+int savePeerFile(std::string dirName, Msg& msg) {
+  /* Checks if LAN-chat directory for files exists. If not it creates it */
+  fs::path dirPath = fs::current_path() / dirName;
+  if (!fs::is_directory(dirPath))
+   fs::create_directory(dirPath);
+
+  /* Creating a path for the recieved file, and creting it in the directory*/
+  fs::path filepath = dirPath / msg.filename;
+  std::fstream file(filepath, std::fstream::out | std::fstream::binary);
+  if (!file.is_open())
+    return LCE_FILE_OP; // Error with file
+
+  /* Writing contents of msg into file */
+  file.write(msg.data.data(), msg.data.size());
+  file.close();
+  return 0;
+}
+
 bool fileExists(const std::string& filePath) {
   return fs::exists(filePath);
 }
