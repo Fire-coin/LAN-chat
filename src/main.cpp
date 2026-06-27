@@ -21,12 +21,11 @@ int main() {
 
   // Currently doing test for UDP discovery
   std::thread discoveryThread(discoverPeers, discoveryPortNum);
-  std::thread peerRequestsThread(handlePeerRequests, portNum);
+  std::thread peerRequestsThread(handlePeerRequestsWrapper, portNum);
 
   std::string selectedIP;
   std::string nick;
   HOME_OPTIONS selectedOption = NO_OPTION;
-  bool showUI = true;
   beginUI();
   while (showUI) {
     selectedOption = displayHomeScreen();
@@ -56,7 +55,7 @@ int main() {
         }
         nickMutex.unlock();
         break;
-      case EXIT: // TODO end all processes
+      case EXIT:
         handleRequests = false;
         doPeerDiscovery = false;
         showUI = false;

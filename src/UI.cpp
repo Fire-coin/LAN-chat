@@ -14,7 +14,7 @@ int ROWS, COLS;
 std::string inputBuffer = "";
 bool updateScreen = false;
 bool displayChat = true;
-bool isInputReady = false;
+std::atomic<bool> showUI = true;
 IPToHistoryMap chatHistory;
 
 std::mutex notificationMutex;
@@ -168,8 +168,9 @@ void displayChatScreen(std::string IP) {
     if (ch == ERR)
       continue;
 
+    // TODO fix backspace on mobile
     // 127 is delete
-    if (ch >= ' ' && ch <= 126 && !isInputReady || ch == KEY_BACKSPACE) {
+    if (ch >= ' ' && ch <= 126 || ch == KEY_BACKSPACE) {
       if (ch != KEY_BACKSPACE) {
         inputBuffer.append(reinterpret_cast<char*>(&ch));
         waddch(inputWin, ch);

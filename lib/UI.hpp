@@ -18,8 +18,7 @@ extern int ROWS, COLS;
 extern std::string inputBuffer;
 extern bool updateScreen;
 extern bool displayChat;
-extern bool isInputReady;
-
+extern std::atomic<bool> showUI;
 // The message which will be shown in chat (no need to store file contents if it is sent)
 struct ChatMsg {
   bool isFile;

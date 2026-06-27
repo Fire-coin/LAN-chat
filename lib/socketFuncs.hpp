@@ -11,7 +11,7 @@ bool _sendMessage(ConnectionSock* socket, std::string msg);
 int _sendFile(ConnectionSock* socket, std::string filepath);
 int recieve(ConnectionSock& socket, std::string& message);
 
-
+void handlePeerRequestsWrapper(int portNum);
 int endRequestHandling();
 int setNonblocking(int sockfd);
 int processFile(std::string& filepath, Msg& msg);

@@ -127,9 +127,13 @@ int setNonblocking(int sockfd) {
     }
     return 0;
 }
-
+void handlePeerRequestsWrapper(int portNum) {
+  handlePeerRequests(portNum);
+  handleRequests = false;
+  doPeerDiscovery = false;
+  showUI = false;
+}
 /* Handles both connection requests and recieving requests (user recieves data from other peers) */
-//TODO make the return statement exit the app
 void handlePeerRequests(int portNum) {
   epollFd = epoll_create1(0);
   if (epollFd == -1) {
