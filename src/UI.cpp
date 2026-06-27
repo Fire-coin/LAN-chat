@@ -10,7 +10,6 @@
 #include "socketFuncs.hpp"
 
 int ROWS, COLS;
-// TODO make an error queue and each UI function will call equivalent to perror after running outisde function
 std::string inputBuffer = "";
 bool updateScreen = false;
 bool displayChat = true;
@@ -373,22 +372,26 @@ std::string displayNewChatScreen() {
   curs_set(0); // Sets cursor to be invisible
   halfdelay(1);
 
-  discoverMutex.lock();
-  int lastSize = currentPeers.size();
+  discoveredPeersMutex.lock();
+  int lastSize = discoveredPeers.size();
 
 
   int current = 0;
-  for (int i = 0; i < currentPeers.size(); ++i) {
+  for (int i = 0; i < discoveredPeers.size(); ++i) {
     // Not showing IP with which the connection is already established
     // TODO implement a mutex
-    if (std::find_if(connectedPeers.begin(), connectedPeers.end(), [i](Peer* p) {return p->IP == currentPeers[i].IP;}) != connectedPeers.end())
+    connectedPeersMutex.lock();
+    if (std::find_if(connectedPeers.begin(), connectedPeers.end(), [i](Peer* p) {return p->IP == discoveredPeers[i].IP;}) != connectedPeers.end()) {
+        connectedPeersMutex.unlock();
         continue;
+    }
+    connectedPeersMutex.unlock();
     if (i == current) {
-      wprintw(optionWin, "[*] %s|%s\n", format(currentPeers[i].IP, 3 * 4 + 3, '<').c_str(), currentPeers[i].nickname.c_str());
+      wprintw(optionWin, "[*] %s|%s\n", format(discoveredPeers[i].IP, 3 * 4 + 3, '<').c_str(), discoveredPeers[i].nickname.c_str());
     } else
-      wprintw(optionWin, "[ ] %s|%s\n", format(currentPeers[i].IP, 3 * 4 + 3, '<').c_str(), currentPeers[i].nickname.c_str());
+      wprintw(optionWin, "[ ] %s|%s\n", format(discoveredPeers[i].IP, 3 * 4 + 3, '<').c_str(), discoveredPeers[i].nickname.c_str());
   }
-  discoverMutex.unlock();
+  discoveredPeersMutex.unlock();
   wrefresh(win);
   int ch;
   bool update = false;
@@ -397,9 +400,9 @@ std::string displayNewChatScreen() {
     if (ch == 27) // Escape
       return "";
     if (ch == 10) {
-      discoverMutex.lock();
-      std::string out = currentPeers.size() > 0 ? currentPeers[current].IP : "";
-      discoverMutex.unlock();
+      discoveredPeersMutex.lock();
+      std::string out = discoveredPeers.size() > 0 ? discoveredPeers[current].IP : "";
+      discoveredPeersMutex.unlock();
 
       wclear(optionWin);
       wrefresh(optionWin);
@@ -410,19 +413,24 @@ std::string displayNewChatScreen() {
     switch (ch) {
       case 'k':
       case KEY_UP:
-        if (current == 0)
-          current = currentPeers.size() > 0 ? currentPeers.size() - 1 : 0;
+        if (current == 0) {
+          discoveredPeersMutex.lock();
+          current = discoveredPeers.size() > 0 ? discoveredPeers.size() - 1 : 0;
+          discoveredPeersMutex.unlock();
+        }
         else
           current--;
         break;
       case 'j':
       case KEY_DOWN:
-        if (currentPeers.size() < 1)
+        discoveredPeersMutex.lock();
+        if (discoveredPeers.size() < 1)
           current = 0;
-        if (current == currentPeers.size() - 1)
+        if (current == discoveredPeers.size() - 1)
           current = 0;
         else
           current++;
+        discoveredPeersMutex.unlock();
         break;
       default:
         update = false;
@@ -431,31 +439,31 @@ std::string displayNewChatScreen() {
       while (checkError() != 0) {}
       update = true;
     }
+    discoveredPeersMutex.lock();
     if (update) {
-      for (int i = 0; i < currentPeers.size(); ++i) {
+      for (int i = 0; i < discoveredPeers.size(); ++i) {
         mvwprintw(optionWin, i, 1, " ");
         if (i == current)
           mvwprintw(optionWin, i, 1, "*");
       }
       wrefresh(optionWin);
     }
-    discoverMutex.lock();
-    if (currentPeers.size() != lastSize) {
-      if (lastSize > currentPeers.size()) // If list got smaller and selected was last option, place selected at the new last option
-        current = currentPeers.size() - 1;
-      lastSize = currentPeers.size();
+    if (discoveredPeers.size() != lastSize) {
+      if (lastSize > discoveredPeers.size()) // If list got smaller and selected was last option, place selected at the new last option
+        current = discoveredPeers.size() - 1;
+      lastSize = discoveredPeers.size();
       wclear(optionWin);
       wmove(optionWin, 0, 0);
       
-      for (int i = 0; i < currentPeers.size(); ++i) {
+      for (int i = 0; i < discoveredPeers.size(); ++i) {
         if (i == current) {
-          wprintw(optionWin, "[*] %s|%s\n", currentPeers[i].IP.c_str(), currentPeers[i].nickname.c_str());
+          wprintw(optionWin, "[*] %s|%s\n", discoveredPeers[i].IP.c_str(), discoveredPeers[i].nickname.c_str());
         } else
-          wprintw(optionWin, "[ ] %s|%s\n", currentPeers[i].IP.c_str(), currentPeers[i].nickname.c_str());
+          wprintw(optionWin, "[ ] %s|%s\n", discoveredPeers[i].IP.c_str(), discoveredPeers[i].nickname.c_str());
       }
       wrefresh(optionWin);
     }
-    discoverMutex.unlock();
+    discoveredPeersMutex.unlock();
   }
 }
 
@@ -632,7 +640,7 @@ std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
   curs_set(0); // Sets cursor to be invisible
   while (1) {
     tempOptions.clear();
-    discoverMutex.lock();
+    connectedPeersMutex.lock();
     for (int i = 0; i < connectedPeers.size(); ++i) {
       entry.clear();
       entry += format(connectedPeers[i]->IP, 3 * 4 + 3, '<');
@@ -647,7 +655,7 @@ std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
       notificationMutex.unlock();
       tempOptions.push_back(entry);
     }
-    discoverMutex.unlock();
+    connectedPeersMutex.unlock();
 
     // Check if new options are different
     if (options.size() != tempOptions.size()) {
@@ -708,11 +716,15 @@ std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
         else
           current++;
         break;
-      case 10: // Enter key
+      case 10: { // Enter key
         wclear(selectorWin);
         wrefresh(selectorWin);
         keypad(win, false);
-        return connectedPeers[current]->IP;
+        connectedPeersMutex.lock();
+        std::string returnIP = connectedPeers[current]->IP; 
+        connectedPeersMutex.unlock();
+        return returnIP;
+      }
       case 27: // Escape
         wclear(selectorWin);
         wrefresh(selectorWin);

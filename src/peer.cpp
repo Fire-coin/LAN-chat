@@ -10,14 +10,14 @@
 #include <algorithm> // find_if
 
 
-std::vector<Peer> currentPeers; // Stores discovered peers, which are currently online
-std::mutex discoverMutex; // Used when manipulating with currentPeers
+std::vector<Peer> discoveredPeers; // Stores discovered peers, which are currently online
+std::mutex discoveredPeersMutex; // Used when manipulating with discoveredPeers
 
 std::atomic<bool> changeNickname = false;
 std::string globalNickname = "";
 std::mutex nickMutex;
 std::vector<Peer*> connectedPeers;
-//TODO add mutex for connectedPeers
+std::mutex connectedPeersMutex;
 
 
 std::atomic<bool> doPeerDiscovery = true;
@@ -82,9 +82,9 @@ void discoverPeers(int portNum) {
       }
 
       isRecievingPacket = false;
-      discoverMutex.lock();
-      auto it = find_if(currentPeers.begin(), currentPeers.end(), [IP](Peer& peer) { return peer.IP == IP; });
-      if (it == currentPeers.end()) {
+      discoveredPeersMutex.lock();
+      auto it = find_if(discoveredPeers.begin(), discoveredPeers.end(), [IP](Peer& peer) { return peer.IP == IP; });
+      if (it == discoveredPeers.end()) {
         // Ignore if IP is one of the machine ones
         if (find_if(IPs.begin(), IPs.end(), [IP](std::string& ip) {return ip == IP; }) == IPs.end()) {
           Peer p;
@@ -92,7 +92,7 @@ void discoverPeers(int portNum) {
           p.nickname = nickname;
           p.lastSeen = std::chrono::steady_clock::now();
           
-          currentPeers.push_back(p);
+          discoveredPeers.push_back(p);
         }
       } else {
         it->lastSeen = std::chrono::steady_clock::now();
@@ -101,27 +101,27 @@ void discoverPeers(int portNum) {
      
       // TODO delete peers which went offline from connectedPeers
       // Scan if some of the peers are offline
-      for (auto it = currentPeers.begin(); it != currentPeers.end();) {
+      for (auto it = discoveredPeers.begin(); it != discoveredPeers.end();) {
         // If last packet recieved from this IP was more than 3 seconds ago
         if (std::chrono::steady_clock::now() - it->lastSeen > std::chrono::milliseconds(3000))
-          it = currentPeers.erase(it);
+          it = discoveredPeers.erase(it);
         else
           ++it;
       }
 
-      discoverMutex.unlock();
+      discoveredPeersMutex.unlock();
     }
   }
 }
 
 // TODO remake this function for curses.h and combine with selector function
 void showPeers() {
-  discoverMutex.lock();
+  discoveredPeersMutex.lock();
   //std::cout << "========== Available peers ==========\n";
-  //for (auto it = currentPeers.begin(); it != currentPeers.end(); ++it)
+  //for (auto it = discoveredPeers.begin(); it != discoveredPeers.end(); ++it)
   //  std::cout << "IP: " << it->IP << "; nickname: " << it->nickname << std::endl;
   //std::cout << "=====================================\n";
-  discoverMutex.unlock();
+  discoveredPeersMutex.unlock();
 }
 
 std::vector<std::string> getMachineIPs() {

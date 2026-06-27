@@ -37,7 +37,7 @@ int main() {
         establishConnection(selectedIP, portNum);
         displayChatScreen(selectedIP);
         break;
-      case CHATS: // TODO add mutex for connectedPeers
+      case CHATS:
         selectedIP = displayChatsScreen(connectedPeers);
           
         if (selectedIP == "")

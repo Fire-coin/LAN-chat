@@ -204,10 +204,14 @@ void handlePeerRequests(int portNum) {
 
           // Adding the peer to connected peers, so it can be detected by Chats screen
           std::string peerIP = sock->getPeerIP();
-          auto it = std::find_if(currentPeers.begin(), currentPeers.end(), [&peerIP](Peer p) {return peerIP == p.IP; });
+          discoveredPeersMutex.lock();
+          auto it = std::find_if(discoveredPeers.begin(), discoveredPeers.end(), [&peerIP](Peer p) {return peerIP == p.IP; });
 
           Peer* p = &(*it);
+          discoveredPeersMutex.unlock();
+          connectedPeersMutex.lock();
           connectedPeers.push_back(p);
+          connectedPeersMutex.unlock();
 
           connectedSockets.push_back(sock);
         }
@@ -264,14 +268,18 @@ void handlePeerRequests(int portNum) {
 }
 void establishConnection(std::string& IPOrHost, int portNum) {
   // finding the peer to which user wants to connect in available peers
-  auto it = std::find_if(currentPeers.begin(), currentPeers.end(), [&IPOrHost](Peer p) {return IPOrHost == p.IP; });
-  if (it == currentPeers.end()) {
+  discoveredPeersMutex.lock();
+  auto it = std::find_if(discoveredPeers.begin(), discoveredPeers.end(), [&IPOrHost](Peer p) {return IPOrHost == p.IP; });
+  if (it == discoveredPeers.end()) {
     pushError("Selected peer is not online", LCE_PEER_OFFLINE);
     return;
   }
-
+  //TODO when deleting peer from discoveredPeers, delete it also from connectedPeers
   Peer* p = &(*it);
+  discoveredPeersMutex.unlock();
+  connectedPeersMutex.lock();
   connectedPeers.push_back(p);
+  connectedPeersMutex.unlock();
 
   ConnectionSock* sock = new ConnectionSock(IPOrHost, std::to_string(portNum), epollFd);
   if (!sock->exists()) {
