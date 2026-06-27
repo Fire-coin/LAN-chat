@@ -629,8 +629,8 @@ std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
   WINDOW* selectorWin;
 
   win = newwin(ROWS, COLS, 0, 0);
-
-  wprintw(win, "Select a chat to enter\n");
+  /* Displaying the header of sreen */
+  wprintw(win, "Select a chat to enter or delete with backspace\n");
   wprintw(win, "nickname   | IP\n");
   wrefresh(win);
   int rows = ROWS - 2;
@@ -650,13 +650,17 @@ std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
   curs_set(0); // Sets cursor to be invisible
   while (1) {
     tempOptions.clear();
+
+
     connectedPeersMutex.lock();
+    /* Calculating if there were any changes of options */
     for (int i = 0; i < connectedPeers.size(); ++i) {
       entry.clear();
       entry += format(connectedPeers[i]->IP, 3 * 4 + 3, '<');
       entry += '|';
       entry += connectedPeers[i]->nickname;
       notificationMutex.lock();
+      /* Showing the notification count */
       if (notifications[connectedPeers[i]->IP] > 0) {
         entry += " {";
         entry += std::to_string(notifications[connectedPeers[i]->IP]);
@@ -693,6 +697,7 @@ std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
         updateWhole = false;
         continue;
       }
+      /* Drawing the all the options onto the screen */
       for (int i = 0; i < rows; ++i) {
         if (i >= options.size()) {
           mvwprintw(selectorWin, i, 0, "%s\n", format("", cols - 1, '<').c_str());
@@ -740,8 +745,16 @@ std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
         wrefresh(selectorWin);
         keypad(win, false);
         return "";
+      /* Disconnect from the selected peer by closing socket file descriptor */
+      case KEY_BACKSPACE:
+      case 127:
+        // TODO add confirmation window
+        closePeerConnection(connectedPeers[current]->IP);
+        break;
+
       default:
         update = false;
+        break;
     }
     if (update) {
       if (arrayBegin != current / rows) { // It does not fit into single window, scroll down

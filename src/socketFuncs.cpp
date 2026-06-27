@@ -114,6 +114,7 @@ int recieve(ConnectionSock* socket, Msg& msg) {
 
 
 std::vector<ConnectionSock*> connectedSockets{};
+std::mutex connectedSocketsMutex;
 // from https://medium.com/@hajorda/non-blocking-sockets-and-i-o-multiplexing-with-epoll-in-c-bd3d8e54c20a
 int setNonblocking(int sockfd) {
     int flags = fcntl(sockfd, F_GETFL, 0);
@@ -133,6 +134,44 @@ void handlePeerRequestsWrapper(int portNum) {
   doPeerDiscovery = false;
   showUI = false;
 }
+// TODO XXX XXX fix segment fault
+int closePeerConnection(std::string IP) {
+  displayError("here");
+  connectedPeersMutex.lock();
+  auto it = std::find_if(connectedPeers.begin(), connectedPeers.end(), [IP](Peer* p) { return p->IP == IP; });
+  if (it == connectedPeers.end()) {
+    pushError("Specified peer is not connected; closePeer", LCE_PEER_OFFLINE);
+    return LCE_ALREADY_REPORTED;
+  }
+  /* It is a pointer, so we need to free the memory */
+  delete *it;
+  /* Erasing the peer from connectedPeers */
+  connectedPeers.erase(it);
+  connectedPeersMutex.unlock();
+  
+  connectedSocketsMutex.lock();
+  auto it2 = std::find_if(connectedSockets.begin(), connectedSockets.end(), [IP](ConnectionSock* s) { return s->getPeerIP() == IP; });
+  if (it2 == connectedSockets.end()) {
+    pushError("Specified socket is not connected; closePeer", LCE_PEER_OFFLINE);
+    return LCE_ALREADY_REPORTED;
+  }
+  /* Removing the socket file descriptor from epoll list */
+  if (epoll_ctl(epollFd, EPOLL_CTL_DEL, (*it2)->clientfd, NULL) == -1) {
+    pushError("epoll_ctl: EPOLL_CTL_DEL; closePeerConnection;", LCE_EPOLL_CTL);
+    return LCE_ALREADY_REPORTED;
+  }
+  /* Closing the socket file deescriptor */
+  (*it2)->close();
+  /* Free the memory */
+  delete *it2;
+  /* Erase the socket from connectedSockets */
+  connectedSockets.erase(it2);
+
+  connectedSocketsMutex.unlock();
+  return 0;
+}
+
+
 /* Handles both connection requests and recieving requests (user recieves data from other peers) */
 void handlePeerRequests(int portNum) {
   epollFd = epoll_create1(0);
@@ -225,7 +264,6 @@ void handlePeerRequests(int portNum) {
             continue;
           }
           Msg msg;
-          // TODO add check for closing file (returned size by recv(fd, ...) == 0)
           int err;
           do {
             err = recieve(*it, msg);
@@ -233,9 +271,11 @@ void handlePeerRequests(int portNum) {
           while (err == LCE_NOT_FULL_MSG);
           // Other peer closed file descriptor
           if (err == LCE_FD_CLOSED) { 
-            connectedSockets.erase(it);
+            closePeerConnection((*it)->getPeerIP());
+            //connectedSockets.erase(it);
             // TODO make the removing peer code 
-            delete *it;
+            //delete *it;
+            continue;
           }
           // TODO not sure to show user this message or not
           if (err == LCE_RECIEVE) {
