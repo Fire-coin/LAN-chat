@@ -329,28 +329,126 @@ HOME_OPTIONS displayHomeScreen() {
   
   getyx(stdscr, y, x);
   WINDOW* homeWin;
-  WINDOW* optionWin;
+  WINDOW* win;
   
   homeWin = newwin(ROWS, COLS, 0, 0);
   wprintw(homeWin, "====LAN-chat====\n");
 
-  optionWin = newwin(homeScreenOptions.size(), COLS, y + 1, 0);
+  win = newwin(homeScreenOptions.size(), COLS, y + 1, 0);
   
   refresh();
   wrefresh(homeWin);
+  int oldNotifications = 0;
+  int ch;
+  bool update = false;
+  bool nothingPressed = true;
+  int rows = homeScreenOptions.size();
+  int cols = COLS;
+  int userChoice = -1;
+  bool updateAll = true;
+  int current = 0;
   auto hso = homeScreenOptions;
-  notificationMutex.lock();
-  // TODO make this screen also refresh dynamically
-  if (totalNotifications > 0) {
-    hso[1] += " {";
-    hso[1] += std::to_string(totalNotifications);
-    hso[1] += '}';
+  while (1) {
+    notificationMutex.lock();
+    // TODO make this screen also refresh dynamically
+    if (totalNotifications > 0 && oldNotifications != totalNotifications) {
+      hso = homeScreenOptions;
+      hso[1] += " {";
+      hso[1] += std::to_string(totalNotifications);
+      hso[1] += '}';
+      oldNotifications = totalNotifications;
+      updateAll = true;
+    }
+    notificationMutex.unlock();
+
+    noecho();
+    halfdelay(10);
+
+    keypad(win, true);
+    curs_set(0); // Sets cursor to be invisible
+    if (updateAll) {
+      wclear(win);
+      for (int i = 0; i < rows; ++i) {
+        if (i >= hso.size()) {
+          wprintw(win, "%s\n", format("", cols - 1, '<').c_str());
+          continue;
+        }
+        if (i == current) {
+          wprintw(win, "[*] %s\n", hso[i].c_str());
+        } else
+          wprintw(win, "[ ] %s\n", hso[i].c_str());
+      }
+      wrefresh(win);
+    }
+    update = false;
+    int arrayBegin = 0;
+
+    ch = wgetch(win);
+    
+    update = true;
+    switch (ch) {
+      case 'k':
+      case KEY_UP:
+        if (current == 0)
+          current = hso.size() - 1;
+        else
+          current--;
+        break;
+      case 'j':
+      case KEY_DOWN:
+        if (current == hso.size() - 1)
+          current = 0;
+        else
+          current++;
+        break;
+      case 10: // Enter key
+        wclear(win);
+        wrefresh(win);
+        userChoice = current;
+        nothingPressed = false;
+        break;
+      case 27: // Escape
+        wclear(win);
+        wrefresh(win);
+        keypad(win, false);
+        userChoice = -1;
+        nothingPressed = false;
+        break;
+      case ERR:
+        nothingPressed = true;
+        break;
+      default:
+        update = false;
+    }
+
+    if (ch == '|')
+      pushError("Test error screen", -1);
+    if (checkError() != 0) {
+      while (checkError() != 0) {}
+      update = true;
+    }
+    
+    if (!nothingPressed)
+      break;
+
+    if (update) {
+      if (arrayBegin != current / rows) { // It does not fit into single window, scroll down
+        arrayBegin = (current / rows) * rows; // should work, lazy to prove why
+        for (int i = 0; i < rows; ++i) {
+          if (i + arrayBegin < hso.size())
+            mvwprintw(win, i, 0, "[ ] %s", format(hso[i + arrayBegin], cols, '<').c_str());
+          else
+            mvwprintw(win, i, 0, "%s", format("", cols, '^').c_str());
+        }
+      }
+      for (int i = 0; i < rows; ++i) {
+        mvwprintw(win, i, 1, " ");
+        if (i == (current % rows))
+          mvwprintw(win, i, 1, "*");
+      }
+      wrefresh(win);
+    }
   }
-  notificationMutex.unlock();
-
-  
-  int userChoice = selector(hso, optionWin, homeScreenOptions.size(), COLS);
-
   switch (userChoice) {
     case -1:
       return NO_OPTION;
@@ -389,7 +487,6 @@ std::string displayNewChatScreen() {
   int current = 0;
   for (int i = 0; i < discoveredPeers.size(); ++i) {
     // Not showing IP with which the connection is already established
-    // TODO implement a mutex
     connectedPeersMutex.lock();
     if (std::find_if(connectedPeers.begin(), connectedPeers.end(), [i](Peer* p) {return p->IP == discoveredPeers[i].IP;}) != connectedPeers.end()) {
         connectedPeersMutex.unlock();
