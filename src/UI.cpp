@@ -601,7 +601,7 @@ bool displayConfirmWin(std::string question) {
   wrefresh(win);
   wrefresh(yes);
   wrefresh(no);
-  refresh();
+  //refresh();
 
   int ch;
   halfdelay(1);
@@ -636,6 +636,8 @@ bool displayConfirmWin(std::string question) {
         break;
       case '\n':
         keypad(win, false);
+        wclear(win);
+        wrefresh(win);
         return current;
     }
   }
@@ -844,10 +846,14 @@ std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
         return "";
       /* Disconnect from the selected peer by closing socket file descriptor */
       case KEY_BACKSPACE:
-      case 127:
+      case 127: {
         // TODO add confirmation window
-        closePeerConnection(connectedPeers[current]->IP);
+        bool responce = displayConfirmWin("Close selected peer connection?");
+        if (responce) {
+          closePeerConnection(connectedPeers[current]->IP);
+        }
         break;
+      }
 
       default:
         update = false;
