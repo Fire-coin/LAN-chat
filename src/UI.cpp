@@ -195,7 +195,7 @@ void displayChatScreen(std::string IP) {
         inputBuffer.erase(index, 5); // Erase the :file
         std::string filename = displayFileSelector();
         if (filename != "") {
-          inputBuffer = "$file=" + filename + inputBuffer;
+          inputBuffer = "$file={" + filename + inputBuffer + "}";
           mvwprintw(inputWin, 1, 0, "%s", format(inputBuffer, COLS, '<').c_str());
           wmove(inputWin, 1, inputBuffer.size());
         }

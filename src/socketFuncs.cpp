@@ -60,12 +60,12 @@ int processFile(std::string& filepath, Msg& msg) {
 }
 int sendMessage(std::string& IP, std::string& message) {
   Msg msg{};
-  int index = message.find("$file=");
+  int index = message.find("$file={");
   if (index == message.npos) { // Text message
     msg.data = message;
   } else { // File
-    // TODO make filename structure be $file={<filepath>}
-    std::string filepath = std::string(message.begin() + index + 6, message.end()); // We add + 6 bytes to start from the filepath
+    int endOfPathIndex = message.find("}");
+    std::string filepath = std::string(message.begin() + index + 7, message.begin() + endOfPathIndex); // We add + 7 bytes to start from the filepath
     int err = processFile(filepath, msg);
     if (err < 0)
       return err;
@@ -137,17 +137,17 @@ void handlePeerRequestsWrapper(int portNum) {
 // TODO XXX XXX fix segment fault
 int closePeerConnection(std::string IP) {
   displayError("here");
-  connectedPeersMutex.lock();
-  auto it = std::find_if(connectedPeers.begin(), connectedPeers.end(), [IP](Peer* p) { return p->IP == IP; });
-  if (it == connectedPeers.end()) {
-    pushError("Specified peer is not connected; closePeer", LCE_PEER_OFFLINE);
-    return LCE_ALREADY_REPORTED;
-  }
-  /* It is a pointer, so we need to free the memory */
-  delete *it;
-  /* Erasing the peer from connectedPeers */
-  connectedPeers.erase(it);
-  connectedPeersMutex.unlock();
+  //connectedPeersMutex.lock();
+  //auto it = std::find_if(connectedPeers.begin(), connectedPeers.end(), [IP](Peer* p) { return p->IP == IP; });
+  //if (it == connectedPeers.end()) {
+  //  pushError("Specified peer is not connected; closePeer", LCE_PEER_OFFLINE);
+  //  return LCE_ALREADY_REPORTED;
+  //}
+  ///* It is a pointer, so we need to free the memory */
+  //delete *it;
+  ///* Erasing the peer from connectedPeers */
+  //connectedPeers.erase(it);
+  //connectedPeersMutex.unlock();
   
   connectedSocketsMutex.lock();
   auto it2 = std::find_if(connectedSockets.begin(), connectedSockets.end(), [IP](ConnectionSock* s) { return s->getPeerIP() == IP; });
