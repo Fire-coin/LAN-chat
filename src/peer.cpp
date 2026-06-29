@@ -16,7 +16,7 @@ std::mutex discoveredPeersMutex; // Used when manipulating with discoveredPeers
 std::atomic<bool> changeNickname = false;
 std::string globalNickname = "";
 std::mutex nickMutex;
-std::vector<Peer*> connectedPeers;
+std::vector<std::shared_ptr<Peer>> connectedPeers;
 std::mutex connectedPeersMutex;
 
 

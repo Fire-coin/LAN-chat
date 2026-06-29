@@ -55,7 +55,7 @@ int main() {
         }
         nickMutex.unlock();
         break;
-      case EXIT:
+      case EXIT: // TODO exit still does not work properly for the last closing peer
         handleRequests = false;
         doPeerDiscovery = false;
         showUI = false;

@@ -134,20 +134,20 @@ void handlePeerRequestsWrapper(int portNum) {
   doPeerDiscovery = false;
   showUI = false;
 }
-// TODO XXX XXX fix segment fault
+
 int closePeerConnection(std::string IP) {
   displayError("here");
-  //connectedPeersMutex.lock();
-  //auto it = std::find_if(connectedPeers.begin(), connectedPeers.end(), [IP](Peer* p) { return p->IP == IP; });
-  //if (it == connectedPeers.end()) {
-  //  pushError("Specified peer is not connected; closePeer", LCE_PEER_OFFLINE);
-  //  return LCE_ALREADY_REPORTED;
-  //}
-  ///* It is a pointer, so we need to free the memory */
-  //delete *it;
-  ///* Erasing the peer from connectedPeers */
-  //connectedPeers.erase(it);
-  //connectedPeersMutex.unlock();
+  connectedPeersMutex.lock();
+  auto it = std::find_if(connectedPeers.begin(), connectedPeers.end(), [IP](std::shared_ptr<Peer> p) { return p->IP == IP; });
+  if (it == connectedPeers.end()) {
+    pushError("Specified peer is not connected; closePeer", LCE_PEER_OFFLINE);
+    return LCE_ALREADY_REPORTED;
+  }
+  displayError("here2");
+  /* Erasing the peer from connectedPeers */
+  connectedPeers.erase(it);
+  displayError("here3");
+  connectedPeersMutex.unlock();
   
   connectedSocketsMutex.lock();
   auto it2 = std::find_if(connectedSockets.begin(), connectedSockets.end(), [IP](ConnectionSock* s) { return s->getPeerIP() == IP; });
@@ -246,7 +246,7 @@ void handlePeerRequests(int portNum) {
           discoveredPeersMutex.lock();
           auto it = std::find_if(discoveredPeers.begin(), discoveredPeers.end(), [&peerIP](Peer p) {return peerIP == p.IP; });
 
-          Peer* p = &(*it);
+          std::shared_ptr<Peer> p = std::make_shared<Peer>(*it);
           discoveredPeersMutex.unlock();
           connectedPeersMutex.lock();
           connectedPeers.push_back(p);
@@ -269,15 +269,13 @@ void handlePeerRequests(int portNum) {
             err = recieve(*it, msg);
           }
           while (err == LCE_NOT_FULL_MSG);
+
           // Other peer closed file descriptor
           if (err == LCE_FD_CLOSED) { 
             closePeerConnection((*it)->getPeerIP());
-            //connectedSockets.erase(it);
-            // TODO make the removing peer code 
-            //delete *it;
             continue;
           }
-          // TODO not sure to show user this message or not
+          /* There was error recieving message from other peer */
           if (err == LCE_RECIEVE) {
             continue;
           }
@@ -314,9 +312,10 @@ void establishConnection(std::string& IPOrHost, int portNum) {
     pushError("Selected peer is not online", LCE_PEER_OFFLINE);
     return;
   }
-  //TODO when deleting peer from discoveredPeers, delete it also from connectedPeers
-  Peer* p = &(*it);
+
+  std::shared_ptr<Peer> p = std::make_shared<Peer>(*it);
   discoveredPeersMutex.unlock();
+
   connectedPeersMutex.lock();
   connectedPeers.push_back(p);
   connectedPeersMutex.unlock();

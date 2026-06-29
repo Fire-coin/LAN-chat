@@ -488,7 +488,7 @@ std::string displayNewChatScreen() {
   for (int i = 0; i < discoveredPeers.size(); ++i) {
     // Not showing IP with which the connection is already established
     connectedPeersMutex.lock();
-    if (std::find_if(connectedPeers.begin(), connectedPeers.end(), [i](Peer* p) {return p->IP == discoveredPeers[i].IP;}) != connectedPeers.end()) {
+    if (std::find_if(connectedPeers.begin(), connectedPeers.end(), [i](std::shared_ptr<Peer> p) {return p->IP == discoveredPeers[i].IP;}) != connectedPeers.end()) {
         connectedPeersMutex.unlock();
         continue;
     }
@@ -717,7 +717,7 @@ std::string displayChangeNicknameScreen(std::string curNick) {
 // TODO make it possible to end chats with some key e.g backspace or q
 // TODO fix bug, where when in Chats screnn on one device, when trying to connect to
 // other device, the other device gets infite empty messages. Only sometimes
-std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
+std::string displayChatsScreen(std::vector<std::shared_ptr<Peer>>& connectedPeers) {
   clear();
   std::vector<std::string> options;
   std::vector<std::string> tempOptions;
@@ -813,7 +813,7 @@ std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
     }
 
     ch = wgetch(selectorWin);
-    
+    bool skip = false;
     update = true;
     switch (ch) {
       case 'k':
@@ -850,7 +850,9 @@ std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
         // TODO add confirmation window
         bool responce = displayConfirmWin("Close selected peer connection?");
         if (responce) {
+          displayError(std::to_string(current) + std::to_string(connectedPeers.size()));
           closePeerConnection(connectedPeers[current]->IP);
+          skip = true;
         }
         break;
       }
@@ -859,6 +861,12 @@ std::string displayChatsScreen(std::vector<Peer*>& connectedPeers) {
         update = false;
         break;
     }
+
+    if (skip) {
+      skip = false;
+      continue;
+    }
+
     if (update) {
       if (arrayBegin != current / rows) { // It does not fit into single window, scroll down
         arrayBegin = (current / rows) * rows; // should work, lazy to prove why

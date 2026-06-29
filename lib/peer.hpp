@@ -6,7 +6,8 @@
 #include <vector>
 #include <mutex> // std::mutex
 #include <atomic> // std::atomic
-
+#include <memory> // std::shared_ptr
+                  
 // Stores all needed information about peers
 struct Peer {
   std::string IP;
@@ -24,7 +25,7 @@ extern std::atomic<bool> changeNickname;
 extern std::string globalNickname;
 extern std::mutex nickMutex;
 
-extern std::vector<Peer*> connectedPeers;
+extern std::vector<std::shared_ptr<Peer>> connectedPeers;
 extern std::mutex connectedPeersMutex;
 
 void discoverPeers(int portNum);
