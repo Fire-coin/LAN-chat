@@ -494,7 +494,7 @@ std::string displayNewChatScreen() {
     }
     connectedPeersMutex.unlock();
     if (i == current) {
-      wprintw(optionWin, "[*] %s|%s\n", format(discoveredPeers[i].IP, 3 * 4 + 3, '<').c_str(), discoveredPeers[i].nickname.c_str());
+      wprintw(optionWin, "[*] %s|%s|%s\n", format(discoveredPeers[i].IP, 3 * 4 + 3, '<').c_str(), discoveredPeers[i].nickname.c_str(), std::to_string(discoveredPeers[i].portNum).c_str());
     } else
       wprintw(optionWin, "[ ] %s|%s\n", format(discoveredPeers[i].IP, 3 * 4 + 3, '<').c_str(), discoveredPeers[i].nickname.c_str());
   }

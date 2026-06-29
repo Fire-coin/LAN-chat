@@ -304,7 +304,7 @@ void handlePeerRequests(int portNum) {
   }
   close(epollFd);
 }
-void establishConnection(std::string& IPOrHost, int portNum) {
+void establishConnection(std::string& IPOrHost) {
   // finding the peer to which user wants to connect in available peers
   discoveredPeersMutex.lock();
   auto it = std::find_if(discoveredPeers.begin(), discoveredPeers.end(), [&IPOrHost](Peer p) {return IPOrHost == p.IP; });
@@ -320,7 +320,7 @@ void establishConnection(std::string& IPOrHost, int portNum) {
   connectedPeers.push_back(p);
   connectedPeersMutex.unlock();
 
-  ConnectionSock* sock = new ConnectionSock(IPOrHost, std::to_string(portNum), epollFd);
+  ConnectionSock* sock = new ConnectionSock(IPOrHost, std::to_string(p->portNum), epollFd);
   if (!sock->exists()) {
     pushError("Error establishing connection: ConnectionSock does not exist", LCE_CONNECTION_SOCK);
     return;

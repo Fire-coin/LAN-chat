@@ -22,10 +22,10 @@ std::mutex connectedPeersMutex;
 
 std::atomic<bool> doPeerDiscovery = true;
 // TODO get rid of async and use epoll for these ones also (maybe)
-void discoverPeers(int portNum) {
+void discoverPeers(uint16_t portNum, uint16_t discoveryPortNum) {
   UDPDiscoverySock uSock = UDPDiscoverySock();
 
-  if (uSock.bind(portNum) < 0) {
+  if (uSock.bind(discoveryPortNum, portNum) < 0) {
     pushError("Discovery socket binding failure", LCE_BIND);
     return;
   }
@@ -40,6 +40,7 @@ void discoverPeers(int portNum) {
   int recvDelay = 500; // In milliseconds
 
   std::string nickname, IP; 
+  uint16_t peerPortNum;
 
   while (doPeerDiscovery) {
     if (changeNickname) {
@@ -66,7 +67,7 @@ void discoverPeers(int portNum) {
     // TODO make this part more unnested, cause its pain to look at 
     if (!isRecievingPacket) {
       isRecievingPacket = true;
-      packetRecvError = std::async(std::launch::async, [recvDelay, &uSock, &IP, &nickname]() { return uSock.recievePacket(IP, nickname, recvDelay); });
+      packetRecvError = std::async(std::launch::async, [recvDelay, &uSock, &IP, &nickname, &peerPortNum]() { return uSock.recievePacket(IP, nickname, peerPortNum, recvDelay); });
     }
 
     auto recvStatus = packetRecvError.wait_for(std::chrono::milliseconds(0));
@@ -91,6 +92,7 @@ void discoverPeers(int portNum) {
           p.IP = IP;
           p.nickname = nickname;
           p.lastSeen = std::chrono::steady_clock::now();
+          p.portNum = peerPortNum;
           
           discoveredPeers.push_back(p);
         }
@@ -99,7 +101,6 @@ void discoverPeers(int portNum) {
         it->nickname = nickname;
       }
      
-      // TODO delete peers which went offline from connectedPeers
       // Scan if some of the peers are offline
       for (auto it = discoveredPeers.begin(); it != discoveredPeers.end();) {
         // If last packet recieved from this IP was more than 3 seconds ago
@@ -114,15 +115,6 @@ void discoverPeers(int portNum) {
   }
 }
 
-// TODO remake this function for curses.h and combine with selector function
-void showPeers() {
-  discoveredPeersMutex.lock();
-  //std::cout << "========== Available peers ==========\n";
-  //for (auto it = discoveredPeers.begin(); it != discoveredPeers.end(); ++it)
-  //  std::cout << "IP: " << it->IP << "; nickname: " << it->nickname << std::endl;
-  //std::cout << "=====================================\n";
-  discoveredPeersMutex.unlock();
-}
 
 std::vector<std::string> getMachineIPs() {
   std::vector<std::string> IPs;

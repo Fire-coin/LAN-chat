@@ -16,7 +16,7 @@ void handlePeerRequestsWrapper(int portNum);
 int endRequestHandling();
 int setNonblocking(int sockfd);
 int processFile(std::string& filepath, Msg& msg);
-void establishConnection(std::string& IPOrHost, int portNum);
+void establishConnection(std::string& IPOrHost);
 void handlePeerRequests(int portNum);
 extern std::atomic<bool> handleRequests;
 extern int epollFd;

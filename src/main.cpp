@@ -20,7 +20,7 @@ int main() {
   int discoveryPortNum = 5000;
 
   // Currently doing test for UDP discovery
-  std::thread discoveryThread(discoverPeers, discoveryPortNum);
+  std::thread discoveryThread(discoverPeers, portNum, discoveryPortNum);
   std::thread peerRequestsThread(handlePeerRequestsWrapper, portNum);
 
   std::string selectedIP;
@@ -34,7 +34,7 @@ int main() {
         selectedIP = displayNewChatScreen();
         if (selectedIP == "")
           break;
-        establishConnection(selectedIP, portNum);
+        establishConnection(selectedIP);
         displayChatScreen(selectedIP);
         break;
       case CHATS:

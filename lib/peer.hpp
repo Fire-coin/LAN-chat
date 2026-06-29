@@ -13,6 +13,7 @@ struct Peer {
   std::string IP;
   std::string nickname;
   std::chrono::steady_clock::time_point lastSeen;
+  uint16_t portNum;
 
   Peer(std::string IP, std::string nick) : IP(IP), nickname(nick) {};
   Peer() : IP(""), nickname("") {};
@@ -28,7 +29,7 @@ extern std::mutex nickMutex;
 extern std::vector<std::shared_ptr<Peer>> connectedPeers;
 extern std::mutex connectedPeersMutex;
 
-void discoverPeers(int portNum);
+void discoverPeers(uint16_t portNum, uint16_t discoveryPortNum);
 extern std::atomic<bool> doPeerDiscovery;
 void showPeers();
 std::vector<std::string> getMachineIPs();

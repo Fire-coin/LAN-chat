@@ -17,7 +17,8 @@ struct Msg {
 
 class UDPDiscoverySock {
   int sockFd;
-  int portNum;
+  uint16_t portNum;
+  uint16_t appPortNum;
   std::string nickname;
   struct sockaddr_in broadcastAddr, transmitAddr ,senderAddr;
 
@@ -26,9 +27,9 @@ class UDPDiscoverySock {
   UDPDiscoverySock(std::string nickname);
   UDPDiscoverySock();
   
-  int bind(int portNum);
+  int bind(uint16_t portNum, uint16_t appPortNum);
   int sendPresence(int delay);
-  int recievePacket(std::string& senderIP, std::string& nickname, int delay);
+  int recievePacket(std::string& senderIP, std::string& nickname, uint16_t& portNum, int delay);
   void changeNickname(std::string newNickname);
 };
 

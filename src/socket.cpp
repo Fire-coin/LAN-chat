@@ -37,8 +37,9 @@ UDPDiscoverySock::UDPDiscoverySock(std::string nickname) {
 }
 
 // inspired by https://github.com/Johannes4Linux/linux_socket_examples/blob/main/udp_client.c
-int UDPDiscoverySock::bind(int portNum) {
+int UDPDiscoverySock::bind(uint16_t portNum, uint16_t appPortNum) {
   this->portNum = portNum;
+  this->appPortNum = appPortNum;
   this->broadcastAddr.sin_family = AF_INET; // IPv4
   this->broadcastAddr.sin_port = htons(portNum); 
   // TODO calculate a private broadcast adrress
@@ -62,7 +63,7 @@ int UDPDiscoverySock::sendPresence(int delay) {
   message.append("LAN-chat|");
   message.append((this->nickname == "") ? "unknown" : this->nickname);
   message.append("|");
-  message.append(std::to_string(this->portNum));
+  message.append(std::to_string(this->appPortNum));
 
   socklen_t broadcastLen = sizeof(this->broadcastAddr);
   
@@ -74,27 +75,34 @@ int UDPDiscoverySock::sendPresence(int delay) {
 }
 
 // TODO make the port be dynamic and as another argument
-int UDPDiscoverySock::recievePacket(std::string& senderIP, std::string& nickname, int delay) {
+int UDPDiscoverySock::recievePacket(std::string& senderIP, std::string& nickname, uint16_t& peerPortNum, int delay) {
   std::vector<char> buffer(MAX_UDP_PACKET_SIZE);
   socklen_t senderLen = sizeof(this->senderAddr);
   int n = recvfrom(this->sockFd, buffer.data(), MAX_UDP_PACKET_SIZE, 0, (struct sockaddr*) &this->senderAddr, &senderLen);
+
   std::string msg(buffer.data(), n);
   std::stringstream ss(msg);
   if (msg.find_first_of('|', 0) == msg.npos)
     return LCE_BAD_PACKET;
+
   std::string appVer, nick, port;
   std::getline(ss, appVer, '|');
   if (appVer != "LAN-chat")
     return LCE_BAD_PACKET;
+
   std::getline(ss, nick, '|');
   std::getline(ss, port, '|');
-  if (port != std::to_string(this->portNum))
+  pushError(port, -1);
+  int portInt = std::stoi(port);
+  if (portInt >= static_cast<int>(UINT16_MAX) || portInt < 0) {
     return LCE_BAD_PACKET;
-
-  // TODO add check to see if the packet arrived from the other LAN-chat Peer
-  // TODO also add nickname separation from packet
+  }
+  
   senderIP = inet_ntoa(this->senderAddr.sin_addr);
+  //TODO truckate nickname to fit max length if needed
   nickname = nick;
+  peerPortNum = static_cast<uint16_t>(portInt);
+
   std::this_thread::sleep_for(std::chrono::milliseconds(delay));
   if (n == -1)
     return LCE_SEND;
