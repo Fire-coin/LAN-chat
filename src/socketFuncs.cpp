@@ -12,8 +12,9 @@
 #include <iostream>
 #include <sys/eventfd.h>
 
-namespace fs = std::filesystem;
 
+std::atomic<int> connectionStatus = 0;
+std::atomic<uint16_t> appPortNum = 55555;
 
 std::atomic<bool> handleRequests = true;
 int epollFd;
@@ -128,8 +129,8 @@ int setNonblocking(int sockfd) {
     }
     return 0;
 }
-void handlePeerRequestsWrapper(int portNum) {
-  handlePeerRequests(portNum);
+void handlePeerRequestsWrapper() {
+  handlePeerRequests();
   handleRequests = false;
   doPeerDiscovery = false;
   showUI = false;
@@ -173,7 +174,7 @@ int closePeerConnection(std::string IP) {
 
 
 /* Handles both connection requests and recieving requests (user recieves data from other peers) */
-void handlePeerRequests(int portNum) {
+void handlePeerRequests() {
   epollFd = epoll_create1(0);
   if (epollFd == -1) {
     pushError("epoll_create1", LCE_EPOLL_CREATE);
@@ -181,13 +182,25 @@ void handlePeerRequests(int portNum) {
   }
 
   MonitorSock monSock = MonitorSock(epollFd);
+   
+  uint16_t i = 0;
+  int err = -1;
+  /* trying to bind monitoring socket to an adress, if it fails try next one
+   * this is repeated up to 10 times (theoretically 10 apps can run on the same machine)*/
+  do {
+    err = monSock.bind(appPortNum + i);
+    i++;
+  } while (err < 0 && i < 10);
 
-  if (monSock.bind(portNum) < 0) {
+  if (err < 0) {
+      connectionStatus = -1;
       pushError("Error binding monitoring socket", LCE_BIND);
       return;
   }
+
+  connectionStatus = 1;
   
-  int err = setNonblocking(monSock.serverfd);
+  err = setNonblocking(monSock.serverfd);
   if (err < 0)
     return;
 

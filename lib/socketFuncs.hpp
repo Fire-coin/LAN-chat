@@ -12,17 +12,19 @@ int _sendFile(ConnectionSock* socket, std::string filepath);
 int recieve(ConnectionSock& socket, std::string& message);
 
 int closePeerConnection(std::string IP);
-void handlePeerRequestsWrapper(int portNum);
+void handlePeerRequestsWrapper();
 int endRequestHandling();
 int setNonblocking(int sockfd);
 int processFile(std::string& filepath, Msg& msg);
 void establishConnection(std::string& IPOrHost);
-void handlePeerRequests(int portNum);
+void handlePeerRequests();
 extern std::atomic<bool> handleRequests;
 extern int epollFd;
 
 extern std::vector<ConnectionSock*> connectedSockets;
 extern std::mutex connectedSocketsMutex;
 
+extern std::atomic<int> connectionStatus;
+extern std::atomic<uint16_t> appPortNum;
 #endif
 #pragma once

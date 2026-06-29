@@ -92,7 +92,6 @@ int UDPDiscoverySock::recievePacket(std::string& senderIP, std::string& nickname
 
   std::getline(ss, nick, '|');
   std::getline(ss, port, '|');
-  pushError(port, -1);
   int portInt = std::stoi(port);
   if (portInt >= static_cast<int>(UINT16_MAX) || portInt < 0) {
     return LCE_BAD_PACKET;

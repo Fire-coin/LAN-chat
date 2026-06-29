@@ -194,6 +194,7 @@ void displayChatScreen(std::string IP) {
       if (index != inputBuffer.npos) {
         inputBuffer.erase(index, 5); // Erase the :file
         std::string filename = displayFileSelector();
+        //TODO clear the buffer even when filename is not valid
         if (filename != "") {
           inputBuffer = "$file={" + filename + inputBuffer + "}";
           mvwprintw(inputWin, 1, 0, "%s", format(inputBuffer, COLS, '<').c_str());

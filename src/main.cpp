@@ -16,12 +16,15 @@
 int main() {
   
   int choice;
-  int portNum = 55555;
+  //int portNum = 55555;
   int discoveryPortNum = 5000;
-
-  // Currently doing test for UDP discovery
-  std::thread discoveryThread(discoverPeers, portNum, discoveryPortNum);
-  std::thread peerRequestsThread(handlePeerRequestsWrapper, portNum);
+  
+  std::thread peerRequestsThread(handlePeerRequestsWrapper);
+  while (connectionStatus == 0) {}
+  if (connectionStatus == -1) {
+    return -1;
+  }
+  std::thread discoveryThread(discoverPeers, appPortNum.load(), discoveryPortNum);
 
   std::string selectedIP;
   std::string nick;
