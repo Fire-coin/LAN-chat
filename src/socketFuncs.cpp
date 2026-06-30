@@ -68,10 +68,12 @@ int sendMessage(std::string& IP, std::string& message) {
     int endOfPathIndex = message.find("}");
     std::string filepath = std::string(message.begin() + index + 7, message.begin() + endOfPathIndex); // We add + 7 bytes to start from the filepath
     int err = processFile(filepath, msg);
-    if (err < 0)
+    if (err < 0) {
+      message.clear();
       return err;
+    }
   }
-  message = "";
+  message.clear(); 
 
 
   // Find peer with this IP

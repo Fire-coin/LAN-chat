@@ -50,12 +50,9 @@ std::string getFilename(const std::string& path) {
     pushError("Specified file does not exist", LCE_FILE_OP);
     return "";
   }
-  //TODO put it into std::path and call .filename() method
-  size_t index = path.find_last_of('/');
-  if (index == path.npos)
-    return path;
-  else
-    return path.substr(index + 1);
+
+  fs::path p(path);
+  return p.filename();
 }
 
 std::string getCurDir() {

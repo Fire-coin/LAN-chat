@@ -196,7 +196,7 @@ void displayChatScreen(std::string IP) {
         std::string filename = displayFileSelector();
         //TODO clear the buffer even when filename is not valid
         if (filename != "") {
-          inputBuffer = "$file={" + filename + inputBuffer + "}";
+          inputBuffer = inputBuffer + "$file={" + filename + "}";
           mvwprintw(inputWin, 1, 0, "%s", format(inputBuffer, COLS, '<').c_str());
           wmove(inputWin, 1, inputBuffer.size());
         }
