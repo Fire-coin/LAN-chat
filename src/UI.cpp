@@ -96,7 +96,7 @@ void endUI() {
 // Inspired from https://invisible-island.net/ncurses/NCURSES-Programming-HOWTO.html#INIT 
 void displayChatLog(WINDOW* win, std::string IP, uint32_t scrollIndex) {
   int x, y = 0;
-  wclear(win);
+  werase(win);
   chatHistoryMutex.lock();
   if (chatHistory.find(IP) == chatHistory.end()) {
     chatHistoryMutex.unlock();
@@ -213,8 +213,9 @@ void displayChatScreen(std::string IP) {
     // Enter has been pressed
     if (ch == 10) {
       sendMessage(IP, inputBuffer);
-      // TODO make better way to clear the line
-      wclear(inputWin);
+      /* This way clearing the line is good, because if somehow error happens, the dividing
+       * line will still be drawn*/
+      werase(inputWin);
       mvwprintw(inputWin, 0, 0, "%s", separator);
       wrefresh(inputWin);
     }
@@ -291,11 +292,11 @@ int selector(std::vector<std::string>& options, WINDOW* win, int rows, int cols)
           current++;
         break;
       case 10: // Enter key
-        wclear(win);
+        werase(win);
         wrefresh(win);
         return current;
       case 27: // Escape
-        wclear(win);
+        werase(win);
         wrefresh(win);
         keypad(win, false);
         return -1;
@@ -338,13 +339,21 @@ HOME_OPTIONS displayHomeScreen() {
   getyx(stdscr, y, x);
   WINDOW* homeWin;
   WINDOW* win;
-  
-  homeWin = newwin(ROWS, COLS, 0, 0);
-  wprintw(homeWin, "====LAN-chat====\n");
+  homeWin = newwin(9, COLS, 0, 0);
+  wprintw(homeWin, "%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", 
+      R"( __         ______   __    __                  __                    __     )",
+      R"(/  |       /      \ /  \  /  |                /  |                  /  |    )",
+      R"(## |      /######  |##  \ ## |        _______ ## |____    ______   _## |_   )",
+      R"(## |      ## |__## |###  \## |       /       |##      \  /      \ / ##   |  )",
+      R"(## |      ##    ## |####  ## |      /#######/ #######  | ######  |######/   )",
+      R"(## |      ######## |## ## ## |      ## |      ## |  ## | /    ## |  ## | __ )",
+      R"(## |_____ ## |  ## |## |#### |      ## \_____ ## |  ## |/####### |  ## |/  |)",
+      R"(##       |## |  ## |## | ### |      ##       |## |  ## |##    ## |  ##  ##/ )",
+      R"(########/ ##/   ##/ ##/   ##/        #######/ ##/   ##/  #######/    ####/  )"
+  );
 
-  win = newwin(homeScreenOptions.size(), COLS, y + 1, 0);
-  
-  refresh();
+  win = newwin(homeScreenOptions.size(), COLS, y + 9, 0);
+ 
   wrefresh(homeWin);
   int oldNotifications = 0;
   int ch;
@@ -374,7 +383,7 @@ HOME_OPTIONS displayHomeScreen() {
     keypad(win, true);
     curs_set(0); // Sets cursor to be invisible
     if (updateAll) {
-      wclear(win);
+      werase(win);
       for (int i = 0; i < rows; ++i) {
         if (i >= hso.size()) {
           wprintw(win, "%s\n", format("", cols - 1, '<').c_str());
@@ -409,13 +418,13 @@ HOME_OPTIONS displayHomeScreen() {
           current++;
         break;
       case 10: // Enter key
-        wclear(win);
+        werase(win);
         wrefresh(win);
         userChoice = current;
         nothingPressed = false;
         break;
       case 27: // Escape
-        wclear(win);
+        werase(win);
         wrefresh(win);
         keypad(win, false);
         userChoice = -1;
@@ -479,9 +488,8 @@ std::string displayNewChatScreen() {
   win = newwin(ROWS, COLS, 0, 0);
   optionWin = newwin(ROWS - 2, COLS, 2, 0);
 
-  // TODO make better header
-  wprintw(win, "====SELECT PEER TO CONNECT====\n");
-  wprintw(win, "        IP         |    nickname\n");
+  wprintw(win, "%s\n", format("==========SELECT PEER TO CONNECT==========", 4 + 4 * 3 + 3 + MAX_NICKNAME_LENGTH, '<').c_str());
+  wprintw(win, "    %s|%s\n", format("IP", 4 * 3 + 3, '^').c_str(), format("nickname", MAX_NICKNAME_LENGTH, '^').c_str());
   
   keypad(win, true);
   curs_set(0); // Sets cursor to be invisible
@@ -518,7 +526,7 @@ std::string displayNewChatScreen() {
       std::string out = discoveredPeers.size() > 0 ? discoveredPeers[current].IP : "";
       discoveredPeersMutex.unlock();
 
-      wclear(optionWin);
+      werase(optionWin);
       wrefresh(optionWin);
       keypad(win, false);
       return out;
@@ -566,7 +574,7 @@ std::string displayNewChatScreen() {
       if (lastSize > discoveredPeers.size()) // If list got smaller and selected was last option, place selected at the new last option
         current = discoveredPeers.size() - 1;
       lastSize = discoveredPeers.size();
-      wclear(optionWin);
+      werase(optionWin);
       wmove(optionWin, 0, 0);
       
       for (int i = 0; i < discoveredPeers.size(); ++i) {
@@ -608,7 +616,6 @@ bool displayConfirmWin(std::string question) {
   wrefresh(win);
   wrefresh(yes);
   wrefresh(no);
-  //refresh();
 
   int ch;
   halfdelay(1);
@@ -794,7 +801,7 @@ std::string displayChatsScreen(std::vector<std::shared_ptr<Peer>>& connectedPeer
     }
     if (updateWhole) {
       if (options.size() == 0) {
-        wclear(selectorWin);
+        werase(selectorWin);
         mvwprintw(selectorWin, 0, 0, "No Peers Connected\n");
         wrefresh(selectorWin);
         updateWhole = false;
