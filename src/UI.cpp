@@ -175,10 +175,9 @@ void displayChatScreen(std::string IP) {
     if (ch == ERR)
       continue;
 
-    // TODO fix backspace on mobile
     // 127 is delete
-    if (ch >= ' ' && ch <= 126 || ch == KEY_BACKSPACE) {
-      if (ch != KEY_BACKSPACE) {
+    if (ch >= ' ' && ch <= 127 || ch == KEY_BACKSPACE) {
+      if (ch != KEY_BACKSPACE && ch != 127) {
         inputBuffer.append(reinterpret_cast<char*>(&ch));
         waddch(inputWin, ch);
       } else {
@@ -194,7 +193,6 @@ void displayChatScreen(std::string IP) {
       if (index != inputBuffer.npos) {
         inputBuffer.erase(index, 5); // Erase the :file
         std::string filename = displayFileSelector();
-        //TODO clear the buffer even when filename is not valid
         if (filename != "") {
           inputBuffer = inputBuffer + "$file={" + filename + "}";
           mvwprintw(inputWin, 1, 0, "%s", format(inputBuffer, COLS, '<').c_str());
@@ -714,9 +712,6 @@ std::string displayChangeNicknameScreen(std::string curNick) {
   }
 }
 
-// TODO make it possible to end chats with some key e.g backspace or q
-// TODO fix bug, where when in Chats screnn on one device, when trying to connect to
-// other device, the other device gets infite empty messages. Only sometimes
 std::string displayChatsScreen(std::vector<std::shared_ptr<Peer>>& connectedPeers) {
   clear();
   std::vector<std::string> options;
