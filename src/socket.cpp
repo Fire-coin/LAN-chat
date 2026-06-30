@@ -18,7 +18,6 @@
 #include <net/if.h>
 
 
-//TODO GLOBALLY put htonl, htons and custom one for 8 bytes everywhere when sending port numbers and numbers
 /* User should always check socket if exists() method */
 UDPDiscoverySock::UDPDiscoverySock() {
   this->sockFd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -110,7 +109,6 @@ int UDPDiscoverySock::sendPresence(int delay) {
   return n;
 }
 
-// TODO make the port be dynamic and as another argument
 int UDPDiscoverySock::recievePacket(std::string& senderIP, std::string& nickname, uint16_t& peerPortNum, int delay) {
   std::vector<char> buffer(MAX_UDP_PACKET_SIZE);
   socklen_t senderLen = sizeof(this->senderAddr);
@@ -134,8 +132,13 @@ int UDPDiscoverySock::recievePacket(std::string& senderIP, std::string& nickname
   }
   
   senderIP = inet_ntoa(this->senderAddr.sin_addr);
-  //TODO truckate nickname to fit max length if needed
-  nickname = nick;
+  
+  /* Trunckating the nickname to fit the margin */
+  if (nick.size() > MAX_NICKNAME_LENGTH)
+    nickname = nick.substr(0, MAX_NICKNAME_LENGTH);
+  else
+    nickname = nick;
+
   peerPortNum = static_cast<uint16_t>(portInt);
 
   std::this_thread::sleep_for(std::chrono::milliseconds(delay));
@@ -143,8 +146,14 @@ int UDPDiscoverySock::recievePacket(std::string& senderIP, std::string& nickname
     return LCE_SEND;
   return n;
 }
-// TODO add checking for max length of nickname
+
 void UDPDiscoverySock::changeNickname(std::string newNickname) {
+  /* Trunckating the nickname to fit the margin */
+  if (newNickname.size() > MAX_NICKNAME_LENGTH) {
+    this->nickname = newNickname.substr(0, MAX_NICKNAME_LENGTH);
+    return;
+  }
+
   this->nickname = newNickname;
 }
 
@@ -155,7 +164,7 @@ MonitorSock::MonitorSock(int epollFd) {
   this->serverfd = socket(AF_INET, SOCK_STREAM, 0);
   memset(&serverAddr, 0, sizeof(serverAddr));
 }
-// TODO make binding through range of ports until one is suitable
+
 int MonitorSock::bind(int portNum) {
   this->port = portNum;
   serverAddr.sin_family = AF_INET; // IPv4

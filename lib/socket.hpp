@@ -9,6 +9,7 @@
 #include <mutex>
 
 constexpr int MAX_UDP_PACKET_SIZE = 128;
+constexpr int MAX_NICKNAME_LENGTH = 32;
 
 struct Msg {
   std::string filename;
@@ -83,7 +84,6 @@ class MonitorSock {
   
   public:
   int serverfd; // Listening socket file descriptor  
-  // TODO add a bind function which will accept IP address *Only if needed
   MonitorSock(int epollFd); // Default address is set to INADDR_ANY
   int bind(int portNumber);
   void listen();

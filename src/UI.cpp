@@ -351,7 +351,6 @@ HOME_OPTIONS displayHomeScreen() {
   auto hso = homeScreenOptions;
   while (1) {
     notificationMutex.lock();
-    // TODO make this screen also refresh dynamically
     if (totalNotifications > 0 && oldNotifications != totalNotifications) {
       hso = homeScreenOptions;
       hso[1] += " {";
@@ -650,7 +649,7 @@ std::string displayChangeNicknameScreen(std::string curNick) {
   WINDOW* nickWin;
 
   // Center nickname window
-  int length = 32;
+  int length = MAX_NICKNAME_LENGTH;
   int avgX, avgY, startX, startY;
   avgX = COLS / 2;
   
@@ -848,7 +847,6 @@ std::string displayChatsScreen(std::vector<std::shared_ptr<Peer>>& connectedPeer
       /* Disconnect from the selected peer by closing socket file descriptor */
       case KEY_BACKSPACE:
       case 127: {
-        // TODO add confirmation window
         bool responce = displayConfirmWin("Close selected peer connection?");
         if (responce) {
           displayError(std::to_string(current) + std::to_string(connectedPeers.size()));
