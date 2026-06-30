@@ -11,7 +11,7 @@
 
 int ROWS, COLS;
 std::string inputBuffer = "";
-bool updateScreen = false;
+std::atomic<bool> updateScreen = false;
 bool displayChat = true;
 std::atomic<bool> showUI = true;
 IPToHistoryMap chatHistory;
@@ -188,18 +188,26 @@ void displayChatScreen(std::string IP) {
         inputBuffer.erase(inputBuffer.size() - 1, 1); // Erase last character from buffer
         mvwdelch(inputWin, y, x - 1);
       }
-      // TODO screen does not update when selector window closes and whole chat stalls
+
       int index = inputBuffer.find(":file");
       if (index != inputBuffer.npos) {
+        updateScreen = true;
         inputBuffer.erase(index, 5); // Erase the :file
         std::string filename = displayFileSelector();
         if (filename != "") {
           inputBuffer = inputBuffer + "$file={" + filename + "}";
-          mvwprintw(inputWin, 1, 0, "%s", format(inputBuffer, COLS, '<').c_str());
-          wmove(inputWin, 1, inputBuffer.size());
         }
+        mvwprintw(inputWin, 1, 0, "%s", format(inputBuffer, COLS, '<').c_str());
+        wmove(inputWin, 1, inputBuffer.size());
       }
       wrefresh(inputWin);
+      /*XXX Extremely ugly fix because I am unable to locate the issue*/
+      /* XXX The issue is that when file selector is displayed and destroyed, no new messages
+       * render from other peer - displayChatLog function is not called at all, despite addMsg
+       * working properly.
+       * This fix is more memory inneficient, but if you take into account that most people will send less than 10 files in one go without switching chat, I believe it is good enough.*/
+      displayChatScreen(IP);
+      break;
     }
     
     // Enter has been pressed
@@ -246,6 +254,7 @@ int selector(std::vector<std::string>& options, WINDOW* win, int rows, int cols)
 
   keypad(win, true);
   curs_set(0); // Sets cursor to be invisible
+  set_escdelay(25);
 
   int current = 0;
   for (int i = 0; i < rows; ++i) {

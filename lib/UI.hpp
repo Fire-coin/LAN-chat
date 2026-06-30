@@ -16,7 +16,7 @@ enum HOME_OPTIONS {NEW_CHAT, CHATS, CHANGE_NICKNAME, EXIT, NO_OPTION};
 extern int ROWS, COLS;
 
 extern std::string inputBuffer;
-extern bool updateScreen;
+extern std::atomic<bool> updateScreen;
 extern bool displayChat;
 extern std::atomic<bool> showUI;
 // The message which will be shown in chat (no need to store file contents if it is sent)

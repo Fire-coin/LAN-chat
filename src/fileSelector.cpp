@@ -30,8 +30,11 @@ std::string displayFileSelector() {
 
     opt = selector(files, selectorWin, ROWS / 2 - 4, COLS / 2 - 2);
 
-    if (opt == -1)
+    if (opt == -1) {
+      wclear(win);
+      wrefresh(win);
       return ""; // No file was selected
+    }
     else {
       if (files[opt] == "..") {
         curPath = getParentDir(curPath);

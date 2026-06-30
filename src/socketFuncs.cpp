@@ -139,17 +139,14 @@ void handlePeerRequestsWrapper() {
 }
 
 int closePeerConnection(std::string IP) {
-  displayError("here");
   connectedPeersMutex.lock();
   auto it = std::find_if(connectedPeers.begin(), connectedPeers.end(), [IP](std::shared_ptr<Peer> p) { return p->IP == IP; });
   if (it == connectedPeers.end()) {
     pushError("Specified peer is not connected; closePeer", LCE_PEER_OFFLINE);
     return LCE_ALREADY_REPORTED;
   }
-  displayError("here2");
   /* Erasing the peer from connectedPeers */
   connectedPeers.erase(it);
-  displayError("here3");
   connectedPeersMutex.unlock();
   
   connectedSocketsMutex.lock();
