@@ -27,6 +27,7 @@ class UDPDiscoverySock {
   UDPDiscoverySock(std::string nickname);
   UDPDiscoverySock();
   
+  std::string getBroadcastAddr();
   int bind(uint16_t portNum, uint16_t appPortNum);
   int sendPresence(int delay);
   int recievePacket(std::string& senderIP, std::string& nickname, uint16_t& portNum, int delay);

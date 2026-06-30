@@ -13,7 +13,9 @@
 #include <chrono>
 #include <sys/epoll.h>
 #include "UI.hpp"
-
+#include <ifaddrs.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
 
 
 //TODO GLOBALLY put htonl, htons and custom one for 8 bytes everywhere when sending port numbers and numbers
@@ -36,16 +38,50 @@ UDPDiscoverySock::UDPDiscoverySock(std::string nickname) {
   this->changeNickname(nickname);
 }
 
+std::string UDPDiscoverySock::getBroadcastAddr() {
+  struct ifaddrs *ifaddr;
+  struct sockaddr_in* broadcastAddr;
+  int family, s;
+  
+  if (getifaddrs(&ifaddr) != 0) {
+    pushError("getifaddrs failed; UDPDiscoverySock::getSubnetMask", LCE_SYS_CALL);
+  }
+
+  for (struct ifaddrs *ifa = ifaddr; ifa; ifa = ifa->ifa_next) {
+    if (ifa->ifa_addr->sa_family == AF_INET) {
+      struct sockaddr_in* addr = (struct sockaddr_in*) ifa->ifa_addr;
+      /* Checks if address is loopback (ussually 127.0.0.1) */
+      if (ifa->ifa_flags & IFF_LOOPBACK)
+        continue;
+
+      //std::cout << std::string(inet_ntoa(addr->sin_addr)) << std::endl;
+      /* If current IP has broadcast address, return it */
+      if (ifa->ifa_flags & IFF_BROADCAST) {
+        broadcastAddr = (struct sockaddr_in* ) ifa->ifa_broadaddr;
+        //std::cout << inet_ntoa(broadcastAddr->sin_addr) << std::endl;
+        return inet_ntoa(broadcastAddr->sin_addr);
+      }
+    }
+  }
+  /* No IP has broadcast address, most probably the device is not connected to network */
+  return "";
+}
+
 // inspired by https://github.com/Johannes4Linux/linux_socket_examples/blob/main/udp_client.c
 int UDPDiscoverySock::bind(uint16_t portNum, uint16_t appPortNum) {
   this->portNum = portNum;
   this->appPortNum = appPortNum;
   this->broadcastAddr.sin_family = AF_INET; // IPv4
   this->broadcastAddr.sin_port = htons(portNum); 
-  // TODO calculate a private broadcast adrress
-  inet_aton("255.255.255.255", &this->broadcastAddr.sin_addr);
+  
+  std::string privateBroadAddr = this->getBroadcastAddr();
+  if (privateBroadAddr == "") {
+    //privateBroadAddr = "255.255.255.255";
+    return LCE_BIND;
+  }
 
-  //TODO move to other place probably
+  inet_aton(privateBroadAddr.c_str(), &this->broadcastAddr.sin_addr);
+
   this->transmitAddr.sin_family = AF_INET;
   this->transmitAddr.sin_port = htons(portNum);
   this->transmitAddr.sin_addr.s_addr = INADDR_ANY;

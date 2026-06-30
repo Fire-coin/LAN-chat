@@ -22,6 +22,7 @@ std::mutex connectedPeersMutex;
 
 std::atomic<bool> doPeerDiscovery = true;
 // TODO get rid of async and use epoll for these ones also (maybe)
+// TODO make the sockets to broadcast on all broadcast addresses that are connected to the device, e.g wlan and eth. Because they can have different subnet masks XXX this is optional for version 1
 void discoverPeers(uint16_t portNum, uint16_t discoveryPortNum) {
   UDPDiscoverySock uSock = UDPDiscoverySock();
 
@@ -29,7 +30,6 @@ void discoverPeers(uint16_t portNum, uint16_t discoveryPortNum) {
     pushError("Discovery socket binding failure", LCE_BIND);
     return;
   }
-
   std::vector<std::string> IPs = getMachineIPs();
   
   bool isSendingPacket = false;
@@ -64,7 +64,7 @@ void discoverPeers(uint16_t portNum, uint16_t discoveryPortNum) {
         continue;
       }
     }
-    // TODO make this part more unnested, cause its pain to look at 
+
     if (!isRecievingPacket) {
       isRecievingPacket = true;
       packetRecvError = std::async(std::launch::async, [recvDelay, &uSock, &IP, &nickname, &peerPortNum]() { return uSock.recievePacket(IP, nickname, peerPortNum, recvDelay); });
@@ -87,15 +87,18 @@ void discoverPeers(uint16_t portNum, uint16_t discoveryPortNum) {
       auto it = find_if(discoveredPeers.begin(), discoveredPeers.end(), [IP](Peer& peer) { return peer.IP == IP; });
       if (it == discoveredPeers.end()) {
         // Ignore if IP is one of the machine ones
-        if (find_if(IPs.begin(), IPs.end(), [IP](std::string& ip) {return ip == IP; }) == IPs.end()) {
-          Peer p;
-          p.IP = IP;
-          p.nickname = nickname;
-          p.lastSeen = std::chrono::steady_clock::now();
-          p.portNum = peerPortNum;
-          
-          discoveredPeers.push_back(p);
+        if (find_if(IPs.begin(), IPs.end(), [IP](std::string& ip) {return ip == IP; }) != IPs.end()) {
+          discoveredPeersMutex.unlock();
+          continue;
         }
+
+        Peer p;
+        p.IP = IP;
+        p.nickname = nickname;
+        p.lastSeen = std::chrono::steady_clock::now();
+        p.portNum = peerPortNum;
+        
+        discoveredPeers.push_back(p);
       } else {
         it->lastSeen = std::chrono::steady_clock::now();
         it->nickname = nickname;
