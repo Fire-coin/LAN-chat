@@ -77,13 +77,17 @@ int sendMessage(std::string& IP, std::string& message) {
 
 
   // Find peer with this IP
+  connectedSocketsMutex.lock();
   auto it = std::find_if(connectedSockets.begin(), connectedSockets.end(), [&IP](ConnectionSock* s) {return IP == s->getPeerIP(); });
   if (it == connectedSockets.end()) {
       pushError("Peer is not connected", LCE_PEER_OFFLINE);
+      connectedSocketsMutex.unlock();
       return LCE_ALREADY_REPORTED; // Peer is not connected
-    }
+  }
 
   int err = (*it)->sendMsg(msg);
+  connectedSocketsMutex.unlock();
+
   if (err == LCE_SEND) {
     pushError("Error sending message", LCE_SEND);
     return LCE_ALREADY_REPORTED;
@@ -270,16 +274,20 @@ void handlePeerRequests() {
           connectedPeersMutex.lock();
           connectedPeers.push_back(p);
           connectedPeersMutex.unlock();
-
+          
+          connectedSocketsMutex.lock();
           connectedSockets.push_back(sock);
+          connectedSocketsMutex.unlock();
         }
       } else { // There is a read or write available on a socket
         uint32_t curEvents = events[i].events;
         if (curEvents & EPOLLIN) {
           int clientFd = events[i].data.fd;
+          connectedSocketsMutex.lock();
           auto it = std::find_if(connectedSockets.begin(), connectedSockets.end(), [clientFd](ConnectionSock* sock) {return sock->clientfd == clientFd; });
           if (it == connectedSockets.end()) {
             pushError("Recieve request from non connected socket recieved", LCE_IMPOSSIBLE);
+            connectedSocketsMutex.unlock();
             continue;
           }
           Msg msg;
@@ -291,24 +299,32 @@ void handlePeerRequests() {
 
           // Other peer closed file descriptor
           if (err == LCE_FD_CLOSED) { 
+            connectedSocketsMutex.unlock();
             closePeerConnection((*it)->getPeerIP());
             continue;
           }
           /* There was error recieving message from other peer */
           if (err == LCE_RECIEVE) {
+            connectedSocketsMutex.unlock();
             continue;
           }
 
           addMsg((*it)->getPeerIP(), msg, 1);
 
+          connectedSocketsMutex.unlock();
+
         } else if (curEvents & EPOLLOUT) {
+          connectedSocketsMutex.lock();
           int clientFd = events[i].data.fd;
           auto it = std::find_if(connectedSockets.begin(), connectedSockets.end(), [clientFd](ConnectionSock* sock) {return sock->clientfd == clientFd; });
           if (it == connectedSockets.end()) {
             pushError("Sent request on non connected socket", LCE_SEND);
+            connectedSocketsMutex.unlock();
             continue;
           }
           int err = (*it)->send();
+          connectedSocketsMutex.unlock();
+
           if (err == LCE_SEND) {
             pushError("Failed to send message", err);
             continue;
@@ -329,6 +345,7 @@ void establishConnection(std::string& IPOrHost) {
   auto it = std::find_if(discoveredPeers.begin(), discoveredPeers.end(), [&IPOrHost](Peer p) {return IPOrHost == p.IP; });
   if (it == discoveredPeers.end()) {
     pushError("Selected peer is not online", LCE_PEER_OFFLINE);
+    discoveredPeersMutex.unlock();
     return;
   }
 
@@ -340,6 +357,7 @@ void establishConnection(std::string& IPOrHost) {
   connectedPeersMutex.unlock();
 
   ConnectionSock* sock = new ConnectionSock(IPOrHost, std::to_string(p->portNum), epollFd);
+  pushError("I am here " + std::to_string(sock->clientfd), -1);
   if (!sock->exists()) {
     pushError("Error establishing connection: ConnectionSock does not exist", LCE_CONNECTION_SOCK);
     return;
@@ -364,6 +382,8 @@ void establishConnection(std::string& IPOrHost) {
     sock->close();
     return;
   }
-
+  
+  connectedSocketsMutex.lock();
   connectedSockets.push_back(sock);
+  connectedSocketsMutex.unlock();
 }

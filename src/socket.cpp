@@ -212,6 +212,7 @@ ConnectionSock::ConnectionSock(int cfd, std::string& IPOrHost, int epollFd) {
 }
 
 ConnectionSock::ConnectionSock(std::string& IPOrHost, std::string port, int epollFd) {
+  this->clientfd = socket(AF_INET, SOCK_STREAM, 0);
   this->port = port;
   this->IPOrHost = IPOrHost;
   this->isEpollout = false;
