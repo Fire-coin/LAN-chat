@@ -199,6 +199,8 @@ void displayChatScreen(std::string IP) {
         }
         mvwprintw(inputWin, 1, 0, "%s", format(inputBuffer, COLS, '<').c_str());
         wmove(inputWin, 1, inputBuffer.size());
+        displayChatScreen(IP);
+        break;
       }
       wrefresh(inputWin);
       /*XXX Extremely ugly fix because I am unable to locate the issue*/
@@ -206,8 +208,6 @@ void displayChatScreen(std::string IP) {
        * render from other peer - displayChatLog function is not called at all, despite addMsg
        * working properly.
        * This fix is more memory inneficient, but if you take into account that most people will send less than 10 files in one go without switching chat, I believe it is good enough.*/
-      displayChatScreen(IP);
-      break;
     }
     
     // Enter has been pressed
@@ -332,7 +332,6 @@ int selector(std::vector<std::string>& options, WINDOW* win, int rows, int cols)
 }
 
 HOME_OPTIONS displayHomeScreen() {
-  // TODO make and display logo
   clear();
   int x, y;
   
@@ -495,29 +494,41 @@ std::string displayNewChatScreen() {
   curs_set(0); // Sets cursor to be invisible
   halfdelay(1);
 
-  discoveredPeersMutex.lock();
-  int lastSize = discoveredPeers.size();
-
-
   int current = 0;
-  for (int i = 0; i < discoveredPeers.size(); ++i) {
-    // Not showing IP with which the connection is already established
-    connectedPeersMutex.lock();
-    if (std::find_if(connectedPeers.begin(), connectedPeers.end(), [i](std::shared_ptr<Peer> p) {return p->IP == discoveredPeers[i].IP;}) != connectedPeers.end()) {
-        connectedPeersMutex.unlock();
-        continue;
-    }
-    connectedPeersMutex.unlock();
-    if (i == current) {
-      wprintw(optionWin, "[*] %s|%s|%s\n", format(discoveredPeers[i].IP, 3 * 4 + 3, '<').c_str(), discoveredPeers[i].nickname.c_str(), std::to_string(discoveredPeers[i].portNum).c_str());
-    } else
-      wprintw(optionWin, "[ ] %s|%s\n", format(discoveredPeers[i].IP, 3 * 4 + 3, '<').c_str(), discoveredPeers[i].nickname.c_str());
-  }
-  discoveredPeersMutex.unlock();
+
   wrefresh(win);
   int ch;
   bool update = false;
   while (1) {
+    wmove(optionWin, 0, 0);
+    discoveredPeersMutex.lock();
+    int lastSize = discoveredPeers.size();
+    /* Redrawing the whole selector screen, thanks to werase, only parts which are different to displayed parts will change. */
+    for (int i = 0; i < ROWS - 2; ++i) {
+      /* If index is past the number of discovered peers, just print empty line */
+      if (i >= discoveredPeers.size()) {
+        wprintw(optionWin, "%s", format("", COLS, '<').c_str());
+        continue;
+      }
+
+      // Not showing IP with which the connection is already established
+      connectedPeersMutex.lock();
+      if (std::find_if(connectedPeers.begin(), connectedPeers.end(), [i](std::shared_ptr<Peer> p) {return p->IP == discoveredPeers[i].IP;}) != connectedPeers.end()) {
+          connectedPeersMutex.unlock();
+          continue;
+      }
+      connectedPeersMutex.unlock();
+
+      /* Displaying which option is selected */
+      if (i == current) {
+        wprintw(optionWin, "[*] %s|%s\n", format(discoveredPeers[i].IP, 3 * 4 + 3, '<').c_str(), discoveredPeers[i].nickname.c_str());
+      } else
+        wprintw(optionWin, "[ ] %s|%s\n", format(discoveredPeers[i].IP, 3 * 4 + 3, '<').c_str(), discoveredPeers[i].nickname.c_str());
+    }
+    discoveredPeersMutex.unlock();
+    /* Update the window if there are any changes */
+    wrefresh(optionWin);
+
     ch = wgetch(optionWin);
     if (ch == 27) // Escape
       return "";
@@ -570,21 +581,7 @@ std::string displayNewChatScreen() {
       }
       wrefresh(optionWin);
     }
-    if (discoveredPeers.size() != lastSize) {
-      if (lastSize > discoveredPeers.size()) // If list got smaller and selected was last option, place selected at the new last option
-        current = discoveredPeers.size() - 1;
-      lastSize = discoveredPeers.size();
-      werase(optionWin);
-      wmove(optionWin, 0, 0);
-      
-      for (int i = 0; i < discoveredPeers.size(); ++i) {
-        if (i == current) {
-          wprintw(optionWin, "[*] %s|%s\n", discoveredPeers[i].IP.c_str(), discoveredPeers[i].nickname.c_str());
-        } else
-          wprintw(optionWin, "[ ] %s|%s\n", discoveredPeers[i].IP.c_str(), discoveredPeers[i].nickname.c_str());
-      }
-      wrefresh(optionWin);
-    }
+
     discoveredPeersMutex.unlock();
   }
 }
