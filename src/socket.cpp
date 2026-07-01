@@ -396,16 +396,34 @@ int ConnectionSock::recieve(Msg& msg) {
   }
   // Am I sure this isnt Java?
   int64_t totalSize = header.filenameSize + header.dataSize;
-  if (this->rawMessage.data.size() < totalSize)
-    this->rawMessage.data.resize(totalSize);
-  while (offset < totalSize + headerSize) {
-    n = this->_recievePart(this->rawMessage.data.data() + offset - headerSize, totalSize - (offset- headerSize));
+  if (this->rawMessage.data.size() < totalSize - (offset - headerSize)) {
+    if (totalSize - (offset - headerSize) <= MAX_PACKAGE_CHUNK)
+      this->rawMessage.data.resize(totalSize - (offset - headerSize));
+    else
+      this->rawMessage.data.resize(MAX_PACKAGE_CHUNK);
+  }
+
+  while (offset < totalSize + headerSize && (offset - headerSize) % MAX_PACKAGE_CHUNK < this->rawMessage.data.size()) {
+    n = this->_recievePart(this->rawMessage.data.data() + (offset - headerSize), this->rawMessage.data.size() - (offset - headerSize) % MAX_PACKAGE_CHUNK);
     if (n < 0)
       return n;
 
     offset += n;
-    if (offset < totalSize + headerSize)
+
+    if ((offset - headerSize) % MAX_PACKAGE_CHUNK < this->rawMessage.data.size()) 
       return LCE_NOT_FULL_MSG;
+
+    if ((offset - headerSize) % MAX_PACKAGE_CHUNK == this->rawMessage.data.size()) {
+      if (header.filenameSize != 0) {
+        msg.filename = std::string(this->rawMessage.data.data(), header.filenameSize);
+      }
+      msg.data = std::string(this->rawMessage.data.data() + header.filenameSize, header.dataSize);
+      this->rawMessage.data.clear();
+
+      if (offset == totalSize + headerSize)
+        return LCE_FULL_PACKAGE;
+      return LCE_NOT_FULL_PACKAGE;
+    }
   }
   msg.filename.clear();
   msg.data.clear();

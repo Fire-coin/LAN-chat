@@ -10,6 +10,7 @@
 
 constexpr int MAX_UDP_PACKET_SIZE = 128;
 constexpr int MAX_NICKNAME_LENGTH = 32;
+constexpr int MAX_PACKAGE_CHUNK = 20000;
 
 struct Msg {
   std::string filename;

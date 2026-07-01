@@ -23,6 +23,8 @@ constexpr int LCE_RECIEVE = -15;
 constexpr int LCE_NOT_FULL_MSG = -16;
 constexpr int LCE_EPOLL_CREATE = -17;
 constexpr int LCE_SYS_CALL= -18;
+constexpr int LCE_NOT_FULL_PACKAGE = -19;
+constexpr int LCE_FULL_PACKAGE = -20;
 
 struct LCError {
   std::string message;

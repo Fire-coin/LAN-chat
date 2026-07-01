@@ -6,7 +6,7 @@
 #include <vector>
 #include "socket.hpp"
 
-int savePeerFile(std::string dirName, Msg& msg);
+int savePeerFile(std::string dirName, Msg& msg, bool overwrite);
 
 void appError(std::string msg);
 

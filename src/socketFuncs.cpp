@@ -100,21 +100,57 @@ int sendMessage(std::string& IP, std::string& message) {
   addMsg(IP, msg, 0);
   return 0;
 }
+std::string modifiedFile = "";
 
 int recieve(ConnectionSock* socket, Msg& msg) {
-  int n = socket->recieve(msg);
+  int n;
+  try {
+    n = socket->recieve(msg);
+  } catch (const std::exception& e) {
+
+    pushError(e.what(), -1);
+  }
+  
+  if (n == LCE_NOT_FULL_PACKAGE || n == LCE_FULL_PACKAGE) {
+    //TODO fix this case
+    if (msg.filename.empty())
+      return LCE_RECIEVE;
+    
+    if (modifiedFile != msg.filename) {
+      int err = savePeerFile(".LAN-chat_files", msg, true);
+
+      if (err == LCE_FILE_OP) {
+        pushError("Problem writing a file; recieve", err);
+        return LCE_ALREADY_REPORTED;
+      }
+      modifiedFile = msg.filename;
+    } else {
+      int err = savePeerFile(".LAN-chat_files", msg, false);
+
+      if (err == LCE_FILE_OP) {
+        pushError("Problem writing a file; recieve", err);
+        return LCE_ALREADY_REPORTED;
+      }
+    }
+    if (n == LCE_FULL_PACKAGE) {
+      modifiedFile.clear();
+      return 0;
+    }
+    return LCE_NOT_FULL_MSG;
+  }
+
   if (n < 0)
     return n;
 
-  if (msg.filename == "")  // Plain message
-   return 0;
-  
-  int err = savePeerFile(".LAN-chat_files", msg);
+  //if (msg.filename == "")  // Plain message
+  // return 0;
+  //
+  //int err = savePeerFile(".LAN-chat_files", msg);
 
-  if (err == LCE_FILE_OP) {
-    pushError("Problem writing a file; recieve", err);
-    return LCE_ALREADY_REPORTED;
-  }
+  //if (err == LCE_FILE_OP) {
+  //  pushError("Problem writing a file; recieve", err);
+  //  return LCE_ALREADY_REPORTED;
+  //}
 
   return 0; // File was written succesfully
 }
@@ -296,6 +332,7 @@ void handlePeerRequests() {
             err = recieve(*it, msg);
           }
           while (err == LCE_NOT_FULL_MSG);
+          
 
           // Other peer closed file descriptor
           if (err == LCE_FD_CLOSED) { 

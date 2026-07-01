@@ -6,7 +6,7 @@
 #include <vector> // std::vector
 #include <utility> // std::pair
 #include <string> // std::string
-#include <curses.h> // for WINDOW
+#include <ncurses.h> // for WINDOW
 #include <atomic> // for std::atomic
 #include <unordered_map>
 #include <mutex>
