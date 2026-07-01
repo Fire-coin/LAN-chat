@@ -857,7 +857,6 @@ std::string displayChatsScreen(std::vector<std::shared_ptr<Peer>>& connectedPeer
       case 127: {
         bool responce = displayConfirmWin("Close selected peer connection?");
         if (responce) {
-          displayError(std::to_string(current) + std::to_string(connectedPeers.size()));
           closePeerConnection(connectedPeers[current]->IP);
           skip = true;
         }

@@ -140,24 +140,30 @@ void handlePeerRequestsWrapper() {
 
 int closePeerConnection(std::string IP) {
   connectedPeersMutex.lock();
+  connectedSocketsMutex.lock();
+
   auto it = std::find_if(connectedPeers.begin(), connectedPeers.end(), [IP](std::shared_ptr<Peer> p) { return p->IP == IP; });
   if (it == connectedPeers.end()) {
     pushError("Specified peer is not connected; closePeer", LCE_PEER_OFFLINE);
+    connectedPeersMutex.unlock();
+    connectedSocketsMutex.unlock();
     return LCE_ALREADY_REPORTED;
   }
   /* Erasing the peer from connectedPeers */
   connectedPeers.erase(it);
-  connectedPeersMutex.unlock();
   
-  connectedSocketsMutex.lock();
   auto it2 = std::find_if(connectedSockets.begin(), connectedSockets.end(), [IP](ConnectionSock* s) { return s->getPeerIP() == IP; });
   if (it2 == connectedSockets.end()) {
     pushError("Specified socket is not connected; closePeer", LCE_PEER_OFFLINE);
+    connectedPeersMutex.unlock();
+    connectedSocketsMutex.unlock();
     return LCE_ALREADY_REPORTED;
   }
   /* Removing the socket file descriptor from epoll list */
   if (epoll_ctl(epollFd, EPOLL_CTL_DEL, (*it2)->clientfd, NULL) == -1) {
     pushError("epoll_ctl: EPOLL_CTL_DEL; closePeerConnection;", LCE_EPOLL_CTL);
+    connectedPeersMutex.unlock();
+    connectedSocketsMutex.unlock();
     return LCE_ALREADY_REPORTED;
   }
   /* Closing the socket file deescriptor */
@@ -167,6 +173,7 @@ int closePeerConnection(std::string IP) {
   /* Erase the socket from connectedSockets */
   connectedSockets.erase(it2);
 
+  connectedPeersMutex.unlock();
   connectedSocketsMutex.unlock();
   return 0;
 }
