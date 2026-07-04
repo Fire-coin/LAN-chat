@@ -112,9 +112,10 @@ int recieve(ConnectionSock* socket, Msg& msg) {
   }
   
   if (n == LCE_NOT_FULL_PACKAGE || n == LCE_FULL_PACKAGE) {
+    //pushError( msg.filename + " " + std::to_string(msg.data.size()), -1);
     //TODO fix this case
     if (msg.filename.empty())
-      return LCE_RECIEVE;
+      return 0;
     
     if (modifiedFile != msg.filename) {
       int err = savePeerFile(".LAN-chat_files", msg, true);
