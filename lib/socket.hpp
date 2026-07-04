@@ -58,7 +58,7 @@ class ConnectionSock {
     Header header;
     std::string data;
     std::string filename;
-    int64_t offset;
+    uint64_t offset;
     int64_t curOffset;
   };
   RawMsg rawMessage;

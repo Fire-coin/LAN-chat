@@ -260,8 +260,8 @@ int ConnectionSock::_sendPart(void* buffer, uint64_t length) {
   while (transmitted < length) {
     n = ::send(this->clientfd, static_cast<char*>(buffer) + transmitted, length - transmitted, 0);
     if (n == -1) {
-      if (errno == EAGAIN)
-        return 0;
+      if (errno == EAGAIN || errno == EWOULDBLOCK)
+        return transmitted + n;
 
       return LCE_SEND;
     }
@@ -282,7 +282,7 @@ int ConnectionSock::send() {
   auto& bufMsg = this->sendMsgBuffer.front();
   std::string& message = bufMsg.first;
   uint64_t& offset = bufMsg.second;
-  
+  pushError("sending: " + std::to_string(message.size()) + " " + std::to_string(offset) + " " + std::to_string(this->sendMsgBuffer.size()), -1); 
   uint64_t msgSize = message.size();
 
   int64_t n = this->_sendPart(message.data() + offset, msgSize - offset);
@@ -291,6 +291,7 @@ int ConnectionSock::send() {
   
   // Whole message was sent
   if (offset + n == msgSize) {
+  pushError("sending2: " + std::to_string(message.size()) + " " + std::to_string(offset) + " " + std::to_string(this->sendMsgBuffer.size()), -1); 
     this->sendMsgBuffer.pop();
     // All the messages from the buffer have been sent, no need to track write events
     if (sendMsgBuffer.empty()) {
@@ -310,6 +311,7 @@ int ConnectionSock::send() {
   }
   // Shifting offset
   offset += n;
+  pushError("sending3: " + std::to_string(message.size()) + " " + std::to_string(offset) + " " + std::to_string(this->sendMsgBuffer.size()), -1); 
   // There is still message in buffer, tell epoll to track write events
   if (!this->isEpollout) {
     this->isEpollout = true;
@@ -329,6 +331,7 @@ int ConnectionSock::send() {
 
 /* Pushes the message to be sent into queue, then calls a method to send the data */
 int ConnectionSock::sendMsg(Msg& msg) {
+  pushError("sendMsg", -1);
   std::string message;
   int64_t dataSize = msg.data.size();
   int16_t filenameSize = msg.filename.size();
@@ -383,7 +386,7 @@ int ConnectionSock::recieve(Msg& msg) {
     this->rawMessageStarted = true;
   }
   
-  int64_t& offset = this->rawMessage.offset;
+  uint64_t& offset = this->rawMessage.offset;
   Header& header = this->rawMessage.header;
   int64_t n = -1;
   
