@@ -49,6 +49,7 @@ int processFile(std::string& filepath, Msg& msg) {
   int64_t fileLength = file.tellg();
   file.seekg(0, file.beg);
   
+  pushError("file length: " + std::to_string(fileLength), -1);
   // Get length of filename
   int16_t filenameLength = filename.size();
   // Reserve space for file data
@@ -118,6 +119,7 @@ int recieve(ConnectionSock* socket, Msg& msg) {
       return 0;
     
     if (modifiedFile != msg.filename) {
+      pushError(msg.filename, -1);
       int err = savePeerFile(".LAN-chat_files", msg, true);
 
       if (err == LCE_FILE_OP) {
@@ -332,8 +334,12 @@ void handlePeerRequests() {
           do {
             err = recieve(*it, msg);
           }
-          while (err == LCE_NOT_FULL_MSG);
+          while (err == LCE_NOT_FULL_PACKAGE);
           
+          if (err == LCE_NOT_FULL_MSG) {
+            connectedSocketsMutex.unlock();
+            continue;
+          }
 
           // Other peer closed file descriptor
           if (err == LCE_FD_CLOSED) { 
@@ -343,6 +349,11 @@ void handlePeerRequests() {
           }
           /* There was error recieving message from other peer */
           if (err == LCE_RECIEVE) {
+            connectedSocketsMutex.unlock();
+            continue;
+          }
+
+          if (err == LCE_FILE_OP) {
             connectedSocketsMutex.unlock();
             continue;
           }

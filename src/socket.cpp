@@ -377,14 +377,17 @@ int ConnectionSock::recieve(Msg& msg) {
   if (!this->rawMessageStarted) {
     memset(&this->rawMessage.header, 0, headerSize);
     this->rawMessage.data.clear();
-    this->rawMessage.offset = 0;
     this->rawMessage.filename.clear();
+    this->rawMessage.offset = 0;
+    this->rawMessage.curOffset = 0;
     this->rawMessageStarted = true;
   }
-
+  
   int64_t& offset = this->rawMessage.offset;
   Header& header = this->rawMessage.header;
   int64_t n = -1;
+  
+
   // Recieve header info
   while (offset < headerSize) {
     n = this->_recievePart((char*)&header + offset, headerSize - offset);
@@ -395,56 +398,105 @@ int ConnectionSock::recieve(Msg& msg) {
     if (offset < headerSize)
       return LCE_NOT_FULL_MSG;
   }
-  // Am I sure this isnt Java?
-  int64_t totalSize = header.filenameSize + header.dataSize;
-  if (this->rawMessage.data.size() < totalSize - (offset - headerSize)) {
-    if (totalSize - (offset - headerSize) <= MAX_PACKAGE_CHUNK)
-      this->rawMessage.data.resize(totalSize - (offset - headerSize));
-    else
-      this->rawMessage.data.resize(MAX_PACKAGE_CHUNK);
-    this->rawMessage.curOffset = 0;
+  
+  if (this->rawMessage.filename.empty()) {
+    this->rawMessage.filename.resize(header.filenameSize);
   }
-
-  //uint64_t curChunk = (int)((offset - headerSize) / MAX_PACKAGE_CHUNK);
-
-  while (offset < totalSize + headerSize && (offset - headerSize) % MAX_PACKAGE_CHUNK < this->rawMessage.data.size()) {
-    n = this->_recievePart(this->rawMessage.data.data() + this->rawMessage.curOffset, this->rawMessage.data.size() - this->rawMessage.curOffset);
+  /* Recieve filename */
+  while (offset - headerSize < header.filenameSize) {
+    pushError("setting up filename" + std::to_string(offset) + " " + std::to_string(header.filenameSize) + " " + std::to_string(header.dataSize), -1);
+    n = this->_recievePart(this->rawMessage.filename.data() + offset - headerSize, header.filenameSize - (offset - headerSize));
     if (n < 0)
       return n;
-    
     offset += n;
-    this->rawMessage.curOffset += n;
-
-    //uint64_t curChunkOffset = (offset - headerSize) - curChunk * MAX_PACKAGE_CHUNK;
-    //std::cout << offset << ' ' << totalSize << ' ' << this->rawMessage.curOffset << std::endl;
-
-    if (this->rawMessage.curOffset < this->rawMessage.data.size()) 
+    if (offset - headerSize < header.filenameSize)
       return LCE_NOT_FULL_MSG;
-    else {
-      if (offset <= MAX_PACKAGE_CHUNK + headerSize) {
-        if (header.filenameSize != 0 && this->rawMessage.filename.empty()) {
-          this->rawMessage.filename = std::string(this->rawMessage.data.data(), header.filenameSize);
-          pushError("new filename" + this->rawMessage.filename, -1);
-        }
-        msg.data = std::string(this->rawMessage.data.data() + header.filenameSize, this->rawMessage.data.size() - header.filenameSize);
-        this->rawMessage.data.clear();
-        msg.filename = this->rawMessage.filename;
+  }
+  
+  uint64_t dataRecieved = (offset - headerSize - header.filenameSize);
 
-      } else {
-        pushError("sys calling" + std::to_string(offset) + " " + std::to_string(this->rawMessage.data.size()) + " " + std::to_string(totalSize) + " " +this->rawMessage.filename, -1);
-        msg.data = std::string(this->rawMessage.data.data(), this->rawMessage.data.size());
-        msg.filename = this->rawMessage.filename;
-        this->rawMessage.data.clear();
-      }
-      this->rawMessage.curOffset = 0;
-      if (offset == totalSize + headerSize) {
-        this->rawMessageStarted = false;
-        return LCE_FULL_PACKAGE;
-      }
-
-      return LCE_NOT_FULL_PACKAGE;
+  if (this->rawMessage.data.size() < header.dataSize - dataRecieved) {
+    if (header.dataSize - dataRecieved < MAX_PACKAGE_CHUNK) {
+      this->rawMessage.data.resize(header.dataSize - dataRecieved);
+    } else {
+      this->rawMessage.data.resize(MAX_PACKAGE_CHUNK);
     }
   }
+
+
+  n = this->_recievePart(this->rawMessage.data.data(), this->rawMessage.data.size());
+
+  if (n < 0)
+    return n;
+
+  if (n == 0)
+    return LCE_NOT_FULL_MSG;
+
+  /*pushError(std::to_string(this->rawMessage.curOffset) + " " +
+            std::to_string(this->rawMessage.data.size()) + " " +
+            this->rawMessage.filename + " " +
+            std::to_string(n), -1);
+  */
+  offset += n;
+
+  msg.filename.clear();
+  msg.data.clear();
+
+  this->rawMessage.data.resize(n);
+
+  msg.filename = this->rawMessage.filename;
+  msg.data = this->rawMessage.data;
+
+
+  if (offset - headerSize - header.filenameSize < header.dataSize) {
+    this->rawMessage.data.clear();
+    return LCE_NOT_FULL_PACKAGE;
+  }
+  pushError("end of recv" + std::to_string(offset) + " " + std::to_string(header.dataSize), -1);
+  this->rawMessageStarted = false;
+  return LCE_FULL_PACKAGE;
+
+
+
+
+  //while (offset < totalSize + headerSize && (offset - headerSize) % MAX_PACKAGE_CHUNK < this->rawMessage.data.size()) {
+  //  n = this->_recievePart(this->rawMessage.data.data() + this->rawMessage.curOffset, this->rawMessage.data.size() - this->rawMessage.curOffset);
+  //  if (n < 0)
+  //    return n;
+  //  
+  //  offset += n;
+  //  this->rawMessage.curOffset += n;
+
+  //  //uint64_t curChunkOffset = (offset - headerSize) - curChunk * MAX_PACKAGE_CHUNK;
+  //  //std::cout << offset << ' ' << totalSize << ' ' << this->rawMessage.curOffset << std::endl;
+
+  //  if (this->rawMessage.curOffset < this->rawMessage.data.size()) 
+  //    return LCE_NOT_FULL_MSG;
+  //  else {
+  //    if (offset <= MAX_PACKAGE_CHUNK + headerSize) {
+  //      if (header.filenameSize != 0 && this->rawMessage.filename.empty()) {
+  //        this->rawMessage.filename = std::string(this->rawMessage.data.data(), header.filenameSize);
+  //        pushError("new filename" + this->rawMessage.filename, -1);
+  //      }
+  //      msg.data = std::string(this->rawMessage.data.data() + header.filenameSize, this->rawMessage.data.size() - header.filenameSize);
+  //      this->rawMessage.data.clear();
+  //      msg.filename = this->rawMessage.filename;
+
+  //    } else {
+  //      pushError("sys calling" + std::to_string(offset) + " " + std::to_string(this->rawMessage.data.size()) + " " + std::to_string(totalSize) + " " +this->rawMessage.filename, -1);
+  //      msg.data = std::string(this->rawMessage.data.data(), this->rawMessage.data.size());
+  //      msg.filename = this->rawMessage.filename;
+  //      this->rawMessage.data.clear();
+  //    }
+  //    this->rawMessage.curOffset = 0;
+  //    if (offset == totalSize + headerSize) {
+  //      this->rawMessageStarted = false;
+  //      return LCE_FULL_PACKAGE;
+  //    }
+
+  //    return LCE_NOT_FULL_PACKAGE;
+  //  }
+  //}
 
   return 0;
 }
