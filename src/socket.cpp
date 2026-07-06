@@ -16,6 +16,7 @@
 #include <ifaddrs.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <cassert>
 
 
 /* User should always check socket if exists() method */
@@ -255,16 +256,18 @@ int ConnectionSock::connect() {
 }
 
 int ConnectionSock::_sendPart(void* buffer, uint64_t length) {
+  static uint64_t totalSent = 0;
   uint64_t transmitted = 0;
   int64_t n = -1;
   while (transmitted < length) {
     n = ::send(this->clientfd, static_cast<char*>(buffer) + transmitted, length - transmitted, 0);
     if (n == -1) {
       if (errno == EAGAIN || errno == EWOULDBLOCK)
-        return transmitted + n;
+        return transmitted;
 
       return LCE_SEND;
     }
+    totalSent += n;
     transmitted += n;
   }
 
@@ -352,23 +355,30 @@ int ConnectionSock::sendMsg(Msg& msg) {
 /* Cyclically recieves every part of the packet sent by send method of other socket.
 * Works for non-blocking socket */
 int ConnectionSock::_recievePart(void* buffer, uint64_t length) {
+  static uint64_t totalRecv = 0;
   uint64_t recieved = 0;
   int64_t n = -1;
   while (recieved < length) {
     n = recv(this->clientfd, static_cast<char*>(buffer) + recieved, length - recieved, 0);
+    //std::cout << "recv returned: " << n << std::endl;
+    //std::cout << "requested: " << length - recieved << std::endl;
+    //std::cout << "recieved so far: " << recieved << std::endl;
     if (n == 0) 
       return LCE_FD_CLOSED; // Indicates that file descriptor was closed
                 
     if (n == -1) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
         // All the data was read from file descriptor
+        //std::cout << "totalRecv: " << totalRecv << std::endl;
         return recieved;
       }
       // If errno was not EAGAIN, an error has occured
       return LCE_RECIEVE;
     }
+    totalRecv += n;
     recieved += n;
   }
+  //std::cout << "totalRecv: " << totalRecv << std::endl;
   return recieved;
 }
 /* Return 0 when Msg is filled with data
@@ -384,6 +394,7 @@ int ConnectionSock::recieve(Msg& msg) {
     this->rawMessage.offset = 0;
     this->rawMessage.curOffset = 0;
     this->rawMessageStarted = true;
+    pushError("clearing everything", -1);
   }
   
   uint64_t& offset = this->rawMessage.offset;
@@ -391,8 +402,19 @@ int ConnectionSock::recieve(Msg& msg) {
   int64_t n = -1;
   
 
+  if (this->rawMessage.filename != "test.ui") {
+  pushError("recv1: " + std::to_string(offset) + " " +
+            std::to_string(this->rawMessage.data.size()) + " filename: " +
+            this->rawMessage.filename + " " +
+            std::to_string(n) + " filenameSize: " +
+            std::to_string(header.filenameSize) + " dataSize: " +
+            std::to_string(header.dataSize) + " offset: " +
+            std::to_string(offset) + " already scanned: " +
+            std::to_string(offset - (uint64_t)headerSize - (uint64_t)header.filenameSize), -1);
+  }
   // Recieve header info
   while (offset < headerSize) {
+    //offset = 0;
     n = this->_recievePart((char*)&header + offset, headerSize - offset);
     if (n < 0)
       return n;
@@ -400,11 +422,25 @@ int ConnectionSock::recieve(Msg& msg) {
     offset += n;
     if (offset < headerSize)
       return LCE_NOT_FULL_MSG;
+    char* pointer = (char*)&header;
+    for (int i = 0; i < 10; ++i) {
+      std::cout << (int)*(pointer + i) << std::endl;
+    }
   }
   
   if (this->rawMessage.filename.empty()) {
     this->rawMessage.filename.resize(header.filenameSize);
   }
+
+  if (this->rawMessage.filename != "test.ui") {
+    pushError("recv2: " + std::to_string(offset) + " " +
+              std::to_string(this->rawMessage.data.size()) + " filename: " +
+              this->rawMessage.filename + " " +
+              std::to_string(n) + " dataSize: " +
+              std::to_string(header.dataSize) + " already scanned: " +
+              std::to_string(offset - (uint64_t)headerSize - (uint64_t)header.filenameSize), -1);
+  }
+    
   /* Recieve filename */
   while (offset - headerSize < header.filenameSize) {
     pushError("setting up filename" + std::to_string(offset) + " " + std::to_string(header.filenameSize) + " " + std::to_string(header.dataSize), -1);
@@ -417,17 +453,19 @@ int ConnectionSock::recieve(Msg& msg) {
   }
   
   uint64_t dataRecieved = (offset - headerSize - header.filenameSize);
+  std::string recievedData;
+  
 
-  if (this->rawMessage.data.size() < header.dataSize - dataRecieved) {
+  if (recievedData.size() < header.dataSize - dataRecieved) {
     if (header.dataSize - dataRecieved < MAX_PACKAGE_CHUNK) {
-      this->rawMessage.data.resize(header.dataSize - dataRecieved);
+      recievedData.resize(header.dataSize - dataRecieved);
     } else {
-      this->rawMessage.data.resize(MAX_PACKAGE_CHUNK);
+      recievedData.resize(MAX_PACKAGE_CHUNK);
     }
   }
 
 
-  n = this->_recievePart(this->rawMessage.data.data(), this->rawMessage.data.size());
+  n = this->_recievePart(recievedData.data(), recievedData.size());
 
   if (n < 0)
     return n;
@@ -435,28 +473,56 @@ int ConnectionSock::recieve(Msg& msg) {
   if (n == 0)
     return LCE_NOT_FULL_MSG;
 
-  /*pushError(std::to_string(this->rawMessage.curOffset) + " " +
-            std::to_string(this->rawMessage.data.size()) + " " +
-            this->rawMessage.filename + " " +
-            std::to_string(n), -1);
-  */
+  
   offset += n;
 
   msg.filename.clear();
   msg.data.clear();
 
-  this->rawMessage.data.resize(n);
+  recievedData.resize(n);
 
   msg.filename = this->rawMessage.filename;
-  msg.data = this->rawMessage.data;
+  if (!this->rawMessage.filename.empty())
+    msg.data = recievedData;
+  else
+    this->rawMessage.data += recievedData;
 
+  if (this->rawMessage.filename != "test.ui") {
+  pushError("recv3: " + std::to_string(offset) + " " +
+            std::to_string(this->rawMessage.data.size()) + " filename: " +
+            this->rawMessage.filename + " " +
+            std::to_string(n) + " dataSize: " +
+            std::to_string(header.dataSize) + " already scanned: " +
+            std::to_string(offset - (uint64_t)headerSize - (uint64_t)header.filenameSize), -1);
+  }
 
-  if (offset - headerSize - header.filenameSize < header.dataSize) {
-    this->rawMessage.data.clear();
+  if (offset - (uint64_t)headerSize - (uint64_t)header.filenameSize < header.dataSize) {
+    if (this->rawMessage.filename.empty()) {
+      pushError(recievedData, -1);
+      return LCE_NOT_FULL_MSG;
+    }
     return LCE_NOT_FULL_PACKAGE;
   }
   pushError("end of recv" + std::to_string(offset) + " " + std::to_string(header.dataSize), -1);
+  if (this->rawMessage.filename.empty()) {
+    msg.data = this->rawMessage.data;
+  }
+
+  std::cout << "offset: " << offset << " all other: " << headerSize + header.filenameSize + header.dataSize << std::endl;
+  assert(offset == headerSize + header.filenameSize + header.dataSize);
+  n = -1;
+
+  n = this->_recievePart(&header, 1);
+  std::cout << n << " " << (int)*(char*)&header << std::endl;
+  //assert(n <= 0);
   this->rawMessageStarted = false;
+    memset(&this->rawMessage.header, 0, headerSize);
+    this->rawMessage.data.clear();
+    this->rawMessage.filename.clear();
+    this->rawMessage.offset = 0;
+    this->rawMessage.curOffset = 0;
+    this->rawMessageStarted = true;
+    pushError("clearing everything", -1);
   return LCE_FULL_PACKAGE;
 
 
