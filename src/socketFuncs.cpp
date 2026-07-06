@@ -49,7 +49,6 @@ int processFile(std::string& filepath, Msg& msg) {
   int64_t fileLength = file.tellg();
   file.seekg(0, file.beg);
   
-  pushError("file length: " + std::to_string(fileLength), -1);
   // Get length of filename
   int16_t filenameLength = filename.size();
   // Reserve space for file data
@@ -113,13 +112,11 @@ int recieve(ConnectionSock* socket, Msg& msg) {
   }
   
   if (n == LCE_NOT_FULL_PACKAGE || n == LCE_FULL_PACKAGE) {
-    //pushError( msg.filename + " " + std::to_string(msg.data.size()), -1);
     //TODO fix this case
     if (msg.filename.empty())
       return 0;
     
     if (modifiedFile != msg.filename) {
-      pushError(msg.filename, -1);
       int err = savePeerFile(".LAN-chat_files", msg, true);
 
       if (err == LCE_FILE_OP) {
@@ -144,16 +141,6 @@ int recieve(ConnectionSock* socket, Msg& msg) {
 
   if (n < 0)
     return n;
-
-  //if (msg.filename == "")  // Plain message
-  // return 0;
-  //
-  //int err = savePeerFile(".LAN-chat_files", msg);
-
-  //if (err == LCE_FILE_OP) {
-  //  pushError("Problem writing a file; recieve", err);
-  //  return LCE_ALREADY_REPORTED;
-  //}
 
   return 0; // File was written succesfully
 }
@@ -331,7 +318,6 @@ void handlePeerRequests() {
           }
           Msg msg;
           int err;
-          //pushError("Calling recieve", -1);
           do {
             err = recieve(*it, msg);
           }
@@ -407,7 +393,6 @@ void establishConnection(std::string& IPOrHost) {
   connectedPeersMutex.unlock();
 
   ConnectionSock* sock = new ConnectionSock(IPOrHost, std::to_string(p->portNum), epollFd);
-  pushError("I am here " + std::to_string(sock->clientfd), -1);
   if (!sock->exists()) {
     pushError("Error establishing connection: ConnectionSock does not exist", LCE_CONNECTION_SOCK);
     return;
