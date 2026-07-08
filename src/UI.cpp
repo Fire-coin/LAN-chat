@@ -353,14 +353,27 @@ int selector(std::vector<std::string>& options, WINDOW* win, int rows, int cols)
 }
 
 HOME_OPTIONS displayHomeScreen() {
-  clear();
-  int x, y;
+  int ch;
+  bool displaySelector = true;
+  int userChoice = -1;
+  int current = 0;
+  auto hso = homeScreenOptions;
   
-  getyx(stdscr, y, x);
   WINDOW* homeWin;
   WINDOW* win;
+
+  clear();
   homeWin = newwin(9, COLS, 0, 0);
-  wprintw(homeWin, "%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", 
+  win = newwin(homeScreenOptions.size(), COLS, 9, 0);
+  // TODO make the newChatScreen not accept anything when the displayed things are empty
+  /* Setting some parameters for selection window */
+  noecho();
+  halfdelay(10);
+  keypad(win, true);
+  curs_set(0); // Sets cursor to be invisible
+  
+  /* Displaying logo */             
+  mvwprintw(homeWin, 0, 0, "%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n", 
       R"( __         ______   __    __                  __                    __     )",
       R"(/  |       /      \ /  \  /  |                /  |                  /  |    )",
       R"(## |      /######  |##  \ ## |        _______ ## |____    ______   _## |_   )",
@@ -371,59 +384,37 @@ HOME_OPTIONS displayHomeScreen() {
       R"(##       |## |  ## |## | ### |      ##       |## |  ## |##    ## |  ##  ##/ )",
       R"(########/ ##/   ##/ ##/   ##/        #######/ ##/   ##/  #######/    ####/  )"
   );
-
-  win = newwin(homeScreenOptions.size(), COLS, y + 9, 0);
- 
   wrefresh(homeWin);
-  int oldNotifications = 0;
-  int ch;
-  bool update = false;
-  bool nothingPressed = true;
-  int rows = homeScreenOptions.size();
-  int cols = COLS;
-  int userChoice = -1;
-  bool updateAll = true;
-  int current = 0;
-  auto hso = homeScreenOptions;
-  while (1) {
-    notificationMutex.lock();
+               
+  while (displaySelector) {
     hso = homeScreenOptions;
+      
+    /* If there are any notifications, add them after the Chats field */
+    notificationMutex.lock();
     if (totalNotifications > 0) {
       hso[1] += " {";
       hso[1] += std::to_string(totalNotifications);
       hso[1] += '}';
-      oldNotifications = totalNotifications;
-    } else {
-      hso[1] = format(hso[1], hso[1].size() + 10, '<');
     }
-    updateAll = true;
     notificationMutex.unlock();
 
-    noecho();
-    halfdelay(10);
-
-    keypad(win, true);
-    curs_set(0); // Sets cursor to be invisible
-    if (updateAll) {
-      werase(win);
-      for (int i = 0; i < rows; ++i) {
-        if (i >= hso.size()) {
-          wprintw(win, "%s\n", format("", cols - 1, '<').c_str());
-          continue;
-        }
-        if (i == current) {
-          wprintw(win, "[*] %s\n", hso[i].c_str());
-        } else
-          wprintw(win, "[ ] %s\n", hso[i].c_str());
-      }
-      wrefresh(win);
-    }
-    update = false;
-    int arrayBegin = 0;
-
-    ch = wgetch(win);
     
-    update = true;
+    /* Redrawing all the options from selector */
+    werase(win);
+    for (int i = 0; i < homeScreenOptions.size(); ++i) {
+      if (i >= hso.size()) {
+        wprintw(win, "%s\n", format("", COLS - 1, '<').c_str());
+        continue;
+      }
+      if (i == current) {
+        wprintw(win, "[*] %s\n", hso[i].c_str());
+      } else
+        wprintw(win, "[ ] %s\n", hso[i].c_str());
+    }
+    wrefresh(win);
+    
+    /* Taking key pressed and performing an action from it */
+    ch = wgetch(win);
     switch (ch) {
       case 'k':
       case KEY_UP:
@@ -440,53 +431,27 @@ HOME_OPTIONS displayHomeScreen() {
           current++;
         break;
       case 10: // Enter key
-        werase(win);
-        wrefresh(win);
         userChoice = current;
-        nothingPressed = false;
+        displaySelector = false;
         break;
       case 27: // Escape
-        werase(win);
-        wrefresh(win);
-        keypad(win, false);
         userChoice = -1;
-        nothingPressed = false;
+        displaySelector = false;
         break;
       case ERR:
-        nothingPressed = true;
         break;
       default:
-        update = false;
-    }
-
-    if (ch == '|')
-      pushError("Test error screen", -1);
-    if (checkError() != 0) {
-      while (checkError() != 0) {}
-      update = true;
-    }
-    
-    if (!nothingPressed)
-      break;
-
-    if (update) {
-      if (arrayBegin != current / rows) { // It does not fit into single window, scroll down
-        arrayBegin = (current / rows) * rows; // should work, lazy to prove why
-        for (int i = 0; i < rows; ++i) {
-          if (i + arrayBegin < hso.size())
-            mvwprintw(win, i, 0, "[ ] %s", format(hso[i + arrayBegin], cols, '<').c_str());
-          else
-            mvwprintw(win, i, 0, "%s", format("", cols, '^').c_str());
-        }
-      }
-      for (int i = 0; i < rows; ++i) {
-        mvwprintw(win, i, 1, " ");
-        if (i == (current % rows))
-          mvwprintw(win, i, 1, "*");
-      }
-      wrefresh(win);
+        break;
     }
   }
+
+  /* Returning the window back to original state */
+  werase(win);
+  wrefresh(win);
+  keypad(win, false);
+  curs_set(1);
+
+  /* Returning which option was selected */
   switch (userChoice) {
     case -1:
       return NO_OPTION;
