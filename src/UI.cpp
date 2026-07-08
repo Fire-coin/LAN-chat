@@ -477,6 +477,7 @@ HOME_OPTIONS displayHomeScreen() {
   }
 }
 
+/* Displays a screen, which shows discovered peers which are currently not connected. Returns IP of selected peer when enter is pressed. */
 std::string displayNewChatScreen() {
   int ch;
   int current = 0;
@@ -582,19 +583,36 @@ std::string displayNewChatScreen() {
   }
 }
 
+/* Classic style confirmation window. It displays gives question
+ * and it has two options: Yes and No, user switches between them by moving right / left
+ * with arrows or vim motions. It returns true / false depending on option selected. */
 bool displayConfirmWin(std::string question) {
-  WINDOW* win;
+  int ch;
   int height = 8, width = COLS / 3;
   int startX, startY;
+  bool current = true; // For yes option
   startY = (ROWS - height) / 2;
   startX = (COLS - width) / 2;
+
+  WINDOW* win;
+
   win = newwin(height, width, startY, startX);
   box(win, 0, 0);
 
-  mvwprintw(win, 1, 1, "%s", format(question, width - 2, '^').c_str());
+  /* Printing the question and wrapping it if needed */
+  int offset = 0;
+  int i = 0;
+
+  while (i < ROWS / 2 - 2 && offset < question.size()) {
+    std::string msgRow = question.substr(i * (width - 2), width - 2);
+    mvwprintw(win, i + 1, 1, "%s", format(question, width - 2, '^').c_str());
+    i++;
+    offset += width - 2;
+  }
 
   WINDOW* yes;
   WINDOW* no;
+
   yes = newwin(3, 5, startY + height - 4, startX + 1);
   no = newwin(3, 4, startY + height - 4, startX + width - 5);
 
@@ -610,11 +628,9 @@ bool displayConfirmWin(std::string question) {
   wrefresh(yes);
   wrefresh(no);
 
-  int ch;
   halfdelay(1);
   keypad(win, true);
   
-  bool current = true; // For yes option
 
   
   while (1) {
@@ -650,6 +666,7 @@ bool displayConfirmWin(std::string question) {
   }
 }
 
+/* Checks if nickname satisfies max length and if it does not contain | symbol */
 bool checkNickname(std::string nick) {
   if (nick.size() > MAX_NICKNAME_LENGTH) {
     pushError("Nickname should not be longer than " + std::to_string(MAX_NICKNAME_LENGTH), -1);
@@ -664,6 +681,10 @@ bool checkNickname(std::string nick) {
   return true;
 }
 
+/* Displays screen, where user can change nickname. It can be either
+ * changed without confirmation by pressing enter, or by pressing 
+ * enter confirmation window will pop up asking whether to save changes.
+ * Before changes are saved checkNickname is called. */
 std::string displayChangeNicknameScreen(std::string curNick) {
   clear();
   WINDOW* textWin;
@@ -761,30 +782,31 @@ std::string displayChangeNicknameScreen(std::string curNick) {
   }
 }
 
+
+/* Displays screen where there are connected chats.
+ * User can select chat and enter there using enter key,
+ * or delete the chat, while preserving chat history for 
+ * current session, using backspace. */
 std::string displayChatsScreen(std::vector<std::shared_ptr<Peer>>& connectedPeers) {
-  clear();
-  std::vector<std::string> options;
-  std::vector<std::string> tempOptions;
-  
+  int ch;
+  int current = 0;
+  int rows = ROWS - 2;
+  int cols = COLS;
+  std::vector<Peer> options;
   std::string entry;
+  
 
   WINDOW* win;
   WINDOW* selectorWin;
 
+  clear();
   win = newwin(ROWS, COLS, 0, 0);
   /* Displaying the header of sreen */
   wprintw(win, "Select a chat to enter or delete with backspace\n");
   wprintw(win, "nickname   | IP\n");
   wrefresh(win);
-  int rows = ROWS - 2;
-  int cols = COLS;
   selectorWin = newwin(rows, cols, 2, 0);
 
-  int ch;
-  bool update = false;
-  int arrayBegin = 0;
-  bool updateWhole = true;
-  int current = 0;
   
   noecho();
   halfdelay(10); // Check for update every second
@@ -792,8 +814,7 @@ std::string displayChatsScreen(std::vector<std::shared_ptr<Peer>>& connectedPeer
   keypad(win, true);
   curs_set(0); // Sets cursor to be invisible
   while (1) {
-    tempOptions.clear();
-
+    options.clear();
 
     connectedPeersMutex.lock();
     /* Calculating if there were any changes of options */
@@ -810,55 +831,30 @@ std::string displayChatsScreen(std::vector<std::shared_ptr<Peer>>& connectedPeer
         entry += "}";
       }
       notificationMutex.unlock();
-      tempOptions.push_back(entry);
+      mvwprintw(selectorWin, i, 0, "[ ] %s", entry.c_str());
+      options.push_back(*connectedPeers[i]);
     }
     connectedPeersMutex.unlock();
 
-    // Check if new options are different
-    if (options.size() != tempOptions.size()) {
-      updateWhole = true;
-      options = tempOptions;
-    }
-    else {
-      for (int i = 0; i < options.size(); ++i) {
-        if (options[i] != tempOptions[i]) {
-          updateWhole = true;
-          options = tempOptions;
-          break;
-        }
-      }
-    }
+
     if (checkError() != 0) {
       while (checkError() != 0) {}
-      updateWhole = true;
     }
-    if (updateWhole) {
-      if (options.size() == 0) {
-        werase(selectorWin);
-        mvwprintw(selectorWin, 0, 0, "No Peers Connected\n");
-        wrefresh(selectorWin);
-        updateWhole = false;
+    /* Clearing unused lines and setting * next to the currently selected peer */
+    for (int i = 0; i < rows; ++i) {
+      if (i >= options.size()) {
+        mvwprintw(selectorWin, i, 0, "%s\n", format("", cols - 1, '<').c_str());
         continue;
       }
-      /* Drawing the all the options onto the screen */
-      for (int i = 0; i < rows; ++i) {
-        if (i >= options.size()) {
-          mvwprintw(selectorWin, i, 0, "%s\n", format("", cols - 1, '<').c_str());
-          continue;
-        }
-        if (i == current) {
-          mvwprintw(selectorWin, i, 0, "[*] %s\n", options[i].c_str());
-        } else {
-          mvwprintw(selectorWin, i, 0, "[ ] %s\n", options[i].c_str());
-        }
-      }
-      wrefresh(selectorWin);
-      updateWhole = false;
+      if (i == current)
+        mvwprintw(selectorWin, i, 1, "*");
     }
 
+    if (options.size() == 0)
+      mvwprintw(selectorWin, 0, 0, "No Peer Connected\n");
+    wrefresh(selectorWin);
+
     ch = wgetch(selectorWin);
-    bool skip = false;
-    update = true;
     switch (ch) {
       case 'k':
       case KEY_UP:
@@ -878,8 +874,9 @@ std::string displayChatsScreen(std::vector<std::shared_ptr<Peer>>& connectedPeer
         wclear(selectorWin);
         wrefresh(selectorWin);
         keypad(win, false);
+
         connectedPeersMutex.lock();
-        std::string returnIP = connectedPeers.size() > 0 ? connectedPeers[current]->IP : ""; 
+        std::string returnIP = options.size() > 0 ? options[current].IP : ""; 
         connectedPeersMutex.unlock();
         return returnIP;
       }
@@ -892,40 +889,12 @@ std::string displayChatsScreen(std::vector<std::shared_ptr<Peer>>& connectedPeer
       case KEY_BACKSPACE:
       case 127: {
         bool responce = displayConfirmWin("Close selected peer connection?");
-        if (responce) {
+        if (responce)
           closePeerConnection(connectedPeers[current]->IP);
-          skip = true;
-        }
         break;
       }
-
       default:
-        update = false;
         break;
-    }
-
-    if (skip) {
-      skip = false;
-      continue;
-    }
-
-    if (update) {
-      if (arrayBegin != current / rows) { // It does not fit into single window, scroll down
-        arrayBegin = (current / rows) * rows; // should work, lazy to prove why
-        for (int i = 0; i < rows; ++i) {
-          if (i + arrayBegin < options.size()) {
-            mvwprintw(selectorWin, i, 0, "[ ] %s", format(options[i + arrayBegin], cols, '<').c_str());
-          }
-          else
-            mvwprintw(selectorWin, i, 0, "%s", format("", cols, '^').c_str());
-        }
-      }
-      for (int i = 0; i < rows; ++i) {
-        mvwprintw(selectorWin, i, 1, " ");
-        if (i == (current % rows))
-          mvwprintw(selectorWin, i, 1, "*");
-      }
-      wrefresh(selectorWin);
     }
   }
 }
