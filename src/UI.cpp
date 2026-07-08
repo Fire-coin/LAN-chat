@@ -127,7 +127,6 @@ void displayChatLog(WINDOW* win, std::string IP, uint32_t scrollIndex) {
     chatHistoryMutex.unlock();
     return;
   }
-  //TODO fix the scroll index such that it increments when messages are sent beyond the visible borders
   if (scrollIndex > curChat.size() - 1)
     scrollIndex = curChat.size() - 1;
   /* Displaying the chat history, with messages telling who send what */
@@ -247,6 +246,13 @@ void displayChatScreen(std::string IP) {
       werase(inputWin);
       mvwprintw(inputWin, 0, 0, "%s", separator);
       wrefresh(inputWin);
+      /* When message is sent, then scroll to the end of conversation */
+      chatHistoryMutex.lock();
+      if (chatHistory[IP].size() > (ROWS - 6) / 2 && scrollIndex < chatHistory[IP].size() - 1 - (ROWS - 6) / 2) {
+        scrollIndex = chatHistory[IP].size() - 1 - (ROWS - 6) / 2;
+        updateScreen = true;
+      }
+      chatHistoryMutex.unlock();
     }
     /* Scroll one message up */
     if (ch == KEY_UP) {
@@ -374,7 +380,6 @@ HOME_OPTIONS displayHomeScreen() {
   clear();
   homeWin = newwin(9, COLS, 0, 0);
   win = newwin(homeScreenOptions.size(), COLS, 9, 0);
-  // TODO make the newChatScreen not accept anything when the displayed things are empty
   /* Setting some parameters for selection window */
   noecho();
   halfdelay(10);
