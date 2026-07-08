@@ -111,12 +111,12 @@ void beginUI() {
 void endUI() {
   endwin();
 }
-
+/* Displays the chat history with given peer, and it starts displaying it from scrollIndex.
+ * It requires already premade window. */
 // Inspired from https://invisible-island.net/ncurses/NCURSES-Programming-HOWTO.html#INIT 
 void displayChatLog(WINDOW* win, std::string IP, uint32_t scrollIndex) {
   /* y is used to track on which row to display next message */
   int x, y = 0;
-  werase(win);
   chatHistoryMutex.lock();
   if (chatHistory.find(IP) == chatHistory.end()) {
     chatHistoryMutex.unlock();
@@ -130,42 +130,48 @@ void displayChatLog(WINDOW* win, std::string IP, uint32_t scrollIndex) {
   //TODO fix the scroll index such that it increments when messages are sent beyond the visible borders
   if (scrollIndex > curChat.size() - 1)
     scrollIndex = curChat.size() - 1;
-
+  /* Displaying the chat history, with messages telling who send what */
+  werase(win);
   for (auto it = curChat.begin() + scrollIndex; it != curChat.end(); ++it) {
     getyx(win, y, x);
-    if (it->creator == 0) { // Message sent
+    /* Message sent */
+    if (it->creator == 0) { 
       if (!it->isFile) 
         mvwprintw(win, y + 1, 0, "Message sent: %s\n", it->data.c_str());
       else
         mvwprintw(win, y + 1, 0, "File sent: %s\n", it->data.c_str());
-    } else { // Message recieved
+    } else { /* Message recieved */
       if (!it->isFile)
         mvwprintw(win, y + 1, 0, "Message recieved: %s\n", it->data.c_str());
       else
         mvwprintw(win, y + 1, 0, "File recieved: %s\n", it->data.c_str());
     }
   }
+  wrefresh(win); // To display it into real terminal
+
   // TODO add color to distinguish between peers
+  /* Clearing the notifications for this chat */
   notificationMutex.lock();
   totalNotifications -= notifications[IP];
   notifications[IP] = 0;
   notificationMutex.unlock();
-  wrefresh(win); // To display it into real terminal
+
   chatHistoryMutex.unlock();
 }
 
 void displayChatScreen(std::string IP) {
-  noecho();
-  WINDOW* chatWin;
-  WINDOW* inputWin;
   int ch;
   uint32_t scrollIndex = 0;
-  halfdelay(1); // Check for request every 200 milliseconds that user does not type
 
+  WINDOW* chatWin;
+  WINDOW* inputWin;
 
   chatWin = newwin(ROWS - 3, COLS, 0, 0);
   inputWin = newwin(3, COLS, ROWS - 3, 0);
+
   keypad(inputWin, true);
+  halfdelay(1); // Check for request every 100 milliseconds that user does not type
+  noecho();
 
   wclear(chatWin);
   wclear(inputWin);
@@ -187,12 +193,14 @@ void displayChatScreen(std::string IP) {
       while (checkError() != 0) {}
       updateScreen = true;
     }
+    /* Updating chat log (new message added or chat was scrolled */
     if (updateScreen) {
       displayChatLog(chatWin, IP, scrollIndex);
       updateScreen = false;
     }
     
     ch = wgetch(inputWin);
+    /* Nothing was pressed */
     if (ch == ERR)
       continue;
 
@@ -240,12 +248,14 @@ void displayChatScreen(std::string IP) {
       mvwprintw(inputWin, 0, 0, "%s", separator);
       wrefresh(inputWin);
     }
+    /* Scroll one message up */
     if (ch == KEY_UP) {
       if (scrollIndex > 0) {
         scrollIndex--;
         updateScreen = true;
       }
     }
+    /* Scroll one message down */
     if (ch == KEY_DOWN) {
       chatHistoryMutex.lock();
       if (scrollIndex < chatHistory[IP].size()) {
@@ -260,16 +270,15 @@ void displayChatScreen(std::string IP) {
       refresh();
       displayChat = false;
     }
-
-    if (ch == '|')
-      pushError("Test error screen", -1);
   }
   
   delete[] separator;
   endwin();
 }
 
-/* Displays option menu and returns the index of selected option */
+/* Displays option menu and returns the index of selected option 
+ * Currently not used anymore, but I will leave it here for possible future implementations
+ * */
 int selector(std::vector<std::string>& options, WINDOW* win, int rows, int cols) {
   noecho();
   cbreak();
@@ -469,29 +478,31 @@ HOME_OPTIONS displayHomeScreen() {
 }
 
 std::string displayNewChatScreen() {
-  clear();
+  int ch;
+  int current = 0;
+  std::vector<Peer> displayedPeers;
+
   WINDOW* win;
   WINDOW* optionWin;
+
+  clear();
   win = newwin(ROWS, COLS, 0, 0);
   optionWin = newwin(ROWS - 2, COLS, 2, 0);
 
+  /* displaying the screen header */
   wprintw(win, "%s\n", format("==========SELECT PEER TO CONNECT==========", 4 + 4 * 3 + 3 + MAX_NICKNAME_LENGTH, '<').c_str());
   wprintw(win, "    %s|%s\n", format("IP", 4 * 3 + 3, '^').c_str(), format("nickname", MAX_NICKNAME_LENGTH, '^').c_str());
   
+  wrefresh(win);
+
   keypad(win, true);
   curs_set(0); // Sets cursor to be invisible
   halfdelay(1);
 
-  int current = 0;
-
-  wrefresh(win);
-  int ch;
-  bool update = false;
   while (1) {
-    wmove(optionWin, 0, 0);
+    displayedPeers.clear();
     discoveredPeersMutex.lock();
-    int lastSize = discoveredPeers.size();
-    /* Redrawing the whole selector screen, thanks to werase, only parts which are different to displayed parts will change. */
+    /* Finding discovered Peers which are not connected, and available to be connected to */
     for (int i = 0; i < ROWS - 2; ++i) {
       /* If index is past the number of discovered peers, just print empty line */
       if (i >= discoveredPeers.size()) {
@@ -501,28 +512,40 @@ std::string displayNewChatScreen() {
 
       // Not showing IP with which the connection is already established
       connectedPeersMutex.lock();
-      if (std::find_if(connectedPeers.begin(), connectedPeers.end(), [i](std::shared_ptr<Peer> p) {return p->IP == discoveredPeers[i].IP;}) != connectedPeers.end()) {
+      auto it = std::find_if(connectedPeers.begin(), connectedPeers.end(), [i](std::shared_ptr<Peer> p) {return p->IP == discoveredPeers[i].IP;});
+      if (it != connectedPeers.end()) {
           connectedPeersMutex.unlock();
           continue;
       }
-      connectedPeersMutex.unlock();
 
-      /* Displaying which option is selected */
-      if (i == current) {
-        wprintw(optionWin, "[*] %s|%s\n", format(discoveredPeers[i].IP, 3 * 4 + 3, '<').c_str(), discoveredPeers[i].nickname.c_str());
-      } else
-        wprintw(optionWin, "[ ] %s|%s\n", format(discoveredPeers[i].IP, 3 * 4 + 3, '<').c_str(), discoveredPeers[i].nickname.c_str());
+      displayedPeers.push_back(discoveredPeers[i]);
+      connectedPeersMutex.unlock();
     }
     discoveredPeersMutex.unlock();
-    /* Update the window if there are any changes */
+    
+    /* Redrawing whole selector and displaying which option is selected */
+    werase(optionWin);
+    for (int i = 0; i < displayedPeers.size(); ++i) {
+      
+      if (i == current) {
+        mvwprintw(optionWin, i, 0, "[*] %s|%s\n", format(displayedPeers[i].IP, 3 * 4 + 3, '<').c_str(), displayedPeers[i].nickname.c_str());
+      } else
+        mvwprintw(optionWin, i, 0, "[ ] %s|%s\n", format(displayedPeers[i].IP, 3 * 4 + 3, '<').c_str(), displayedPeers[i].nickname.c_str());
+    }
     wrefresh(optionWin);
+    
+    /* Check if there are any errors thrown */
+    if (checkError() != 0) {
+      while (checkError() != 0) {}
+    }
 
+    /* Get the pressed key and do some action depending on it */
     ch = wgetch(optionWin);
     if (ch == 27) // Escape
       return "";
     if (ch == 10) {
       discoveredPeersMutex.lock();
-      std::string out = discoveredPeers.size() > 0 ? discoveredPeers[current].IP : "";
+      std::string out = displayedPeers.size() > 0 ? displayedPeers[current].IP : "";
       discoveredPeersMutex.unlock();
 
       werase(optionWin);
@@ -530,7 +553,7 @@ std::string displayNewChatScreen() {
       keypad(win, false);
       return out;
     }
-    update = true;
+
     switch (ch) {
       case 'k':
       case KEY_UP:
@@ -554,23 +577,8 @@ std::string displayNewChatScreen() {
         discoveredPeersMutex.unlock();
         break;
       default:
-        update = false;
+        break;
     }
-    if (checkError() != 0) {
-      while (checkError() != 0) {}
-      update = true;
-    }
-    discoveredPeersMutex.lock();
-    if (update) {
-      for (int i = 0; i < discoveredPeers.size(); ++i) {
-        mvwprintw(optionWin, i, 1, " ");
-        if (i == current)
-          mvwprintw(optionWin, i, 1, "*");
-      }
-      wrefresh(optionWin);
-    }
-
-    discoveredPeersMutex.unlock();
   }
 }
 
