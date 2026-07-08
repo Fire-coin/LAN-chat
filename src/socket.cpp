@@ -117,12 +117,12 @@ int UDPDiscoverySock::recievePacket(std::string& senderIP, std::string& nickname
   std::stringstream ss(msg);
   if (msg.find_first_of('|', 0) == msg.npos)
     return LCE_BAD_PACKET;
-
+  /* Getting the app version from packet */
   std::string appVer, nick, port;
   std::getline(ss, appVer, '|');
   if (appVer != "LAN-chat")
     return LCE_BAD_PACKET;
-
+  /* Getting nickname and port number from packet */
   std::getline(ss, nick, '|');
   std::getline(ss, port, '|');
   int portInt = std::stoi(port);

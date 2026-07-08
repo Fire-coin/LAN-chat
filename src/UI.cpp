@@ -24,7 +24,8 @@ int totalNotifications = 0;
 std::vector<std::string> homeScreenOptions = {"New Chat", "Chats", "Change Nickname", "Exit"};
 std::atomic<HOME_OPTIONS> selectedOption;
 
-
+/* Checks error queue for any errors. If there are errors present, it calls displatError
+ * to display it. */
 int checkError() {
   errorMutex.lock();
   if (errorQueue.empty()) {
@@ -39,6 +40,9 @@ int checkError() {
   return lce.errorCode;
 }
 
+/* Creates an error window which is put into a box. It displays header that 
+ * this is error window. Except for that it aso shows provided error message.
+ * The mesage is qrapped if it does not fit into single line. */
 void displayError(std::string error) {
   WINDOW* win;
   curs_set(0);
@@ -46,10 +50,20 @@ void displayError(std::string error) {
   // Center the window
   int startY = ROWS / 4;
   int startX = COLS / 4;
+  int availableSize = COLS / 2 - 2;
   win = newwin(ROWS / 2, COLS / 2, startY, startX);
   box(win, 0, 0);
   mvwprintw(win, 1, 1, "%s", format("====LAN-chat Error====", COLS / 2 - 2, '^').c_str());
-  mvwprintw(win, 2, 1, "%s", format(error, COLS / 2 - 2, '^').c_str());
+  int offset = 0;
+  int i = 0;
+
+  while (i < ROWS / 2 - 2 && offset < error.size()) {
+    std::string msgRow = error.substr(i * availableSize, availableSize);
+    mvwprintw(win, i + 2, 1, "%s", format(msgRow, availableSize, '^').c_str());
+    i++;
+    offset += availableSize;
+  }
+
   mvwprintw(win, ROWS / 2 - 2, 1, "%s", format("Press Escape to close this window", COLS / 2 - 2, '^').c_str());
   wrefresh(win);
   int ch = ERR;
@@ -60,6 +74,10 @@ void displayError(std::string error) {
   wrefresh(win);
 }
 
+/* A thread safe way to add a message into chat history of given IP. 
+ * creator means either sender or reciever on who added the message.
+ * cretator=0 means that sender added (you wrote the message), and creator=1
+ * means that message was recieved*/
 void addMsg(std::string IP, Msg msg, int creator) {
   chatHistoryMutex.lock();
   if (creator == 1) { // A message recieved
@@ -81,7 +99,7 @@ void addMsg(std::string IP, Msg msg, int creator) {
   updateScreen = true;
   chatHistoryMutex.unlock();
 }
-
+/* Calls initsrc() and gets dimensions of the screen. */
 void beginUI() {
   initscr();
   noecho();
@@ -89,12 +107,14 @@ void beginUI() {
   getmaxyx(stdscr, ROWS, COLS);
 }
 
+/* Just read the name and statement in it. */
 void endUI() {
   endwin();
 }
 
 // Inspired from https://invisible-island.net/ncurses/NCURSES-Programming-HOWTO.html#INIT 
 void displayChatLog(WINDOW* win, std::string IP, uint32_t scrollIndex) {
+  /* y is used to track on which row to display next message */
   int x, y = 0;
   werase(win);
   chatHistoryMutex.lock();
@@ -107,6 +127,7 @@ void displayChatLog(WINDOW* win, std::string IP, uint32_t scrollIndex) {
     chatHistoryMutex.unlock();
     return;
   }
+  //TODO fix the scroll index such that it increments when messages are sent beyond the visible borders
   if (scrollIndex > curChat.size() - 1)
     scrollIndex = curChat.size() - 1;
 
@@ -654,6 +675,20 @@ bool displayConfirmWin(std::string question) {
   }
 }
 
+bool checkNickname(std::string nick) {
+  if (nick.size() > MAX_NICKNAME_LENGTH) {
+    pushError("Nickname should not be longer than " + std::to_string(MAX_NICKNAME_LENGTH), -1);
+    return false;
+  }
+
+  if (nick.find_first_of('|') != nick.npos) {
+    pushError("Nickname cannot contain | character", -1);
+    return false;
+  }
+  
+  return true;
+}
+
 std::string displayChangeNicknameScreen(std::string curNick) {
   clear();
   WINDOW* textWin;
@@ -685,7 +720,7 @@ std::string displayChangeNicknameScreen(std::string curNick) {
     if (checkError() != 0) {
       while (checkError() != 0) {}
       box(nickWin, 0, 0);
-      wprintw(textWin, "Your nickname\n");
+      mvwprintw(textWin, 0, 0, "Your nickname\n");
       mvwprintw(nickWin, 1, 1, "%s", curNick.c_str());
     }
 
@@ -713,14 +748,40 @@ std::string displayChangeNicknameScreen(std::string curNick) {
       }
     }
 
-    if (ch == 10)
-      return curNick;
-    if (ch == 27) { // Escape
-      bool responce = displayConfirmWin("Do you want to save changes?");
-      if (responce)
+    if (ch == 10) {
+      bool result = checkNickname(curNick);
+
+      if (checkError() != 0) {
+        while (checkError() != 0) {}
+        box(nickWin, 0, 0);
+        mvwprintw(textWin, 0, 0, "Your nickname\n");
+        mvwprintw(nickWin, 1, 1, "%s", curNick.c_str());
+        continue;
+      }
+
+      if (result)
         return curNick;
       else
         return "~|NO_change|~";
+    }
+
+    if (ch == 27) { // Escape
+      bool responce = displayConfirmWin("Do you want to save changes?");
+      if (!responce)
+        return "~|NO_change|~";
+
+      bool result = checkNickname(curNick);
+
+      if (checkError() != 0) {
+        while (checkError() != 0) {}
+        box(nickWin, 0, 0);
+        mvwprintw(textWin, 0, 0, "Your nickname\n");
+        mvwprintw(nickWin, 1, 1, "%s", curNick.c_str());
+        continue;
+      }
+      
+      if (result)
+        return curNick;
     }
   }
 }
@@ -843,7 +904,7 @@ std::string displayChatsScreen(std::vector<std::shared_ptr<Peer>>& connectedPeer
         wrefresh(selectorWin);
         keypad(win, false);
         connectedPeersMutex.lock();
-        std::string returnIP = connectedPeers[current]->IP; 
+        std::string returnIP = connectedPeers.size() > 0 ? connectedPeers[current]->IP : ""; 
         connectedPeersMutex.unlock();
         return returnIP;
       }

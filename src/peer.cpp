@@ -104,17 +104,23 @@ void discoverPeers(uint16_t portNum, uint16_t discoveryPortNum) {
         it->nickname = nickname;
       }
      
-      // Scan if some of the peers are offline
-      for (auto it = discoveredPeers.begin(); it != discoveredPeers.end();) {
-        // If last packet recieved from this IP was more than 3 seconds ago
-        if (std::chrono::steady_clock::now() - it->lastSeen > std::chrono::milliseconds(3000))
-          it = discoveredPeers.erase(it);
-        else
-          ++it;
-      }
 
       discoveredPeersMutex.unlock();
     }
+    discoveredPeersMutex.lock();
+    // Scan if some of the peers are offline
+    for (auto it = discoveredPeers.begin(); it != discoveredPeers.end();) {
+      // If last packet recieved from this IP was more than 3 seconds ago
+      //pushError("here1", -1);
+      if (std::chrono::steady_clock::now() - it->lastSeen> std::chrono::milliseconds(3000)) {
+
+        pushError("here2", -1);
+        it = discoveredPeers.erase(it);
+      }
+      else
+        ++it;
+    }
+    discoveredPeersMutex.unlock();
   }
 }
 

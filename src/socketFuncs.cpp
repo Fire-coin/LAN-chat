@@ -297,6 +297,7 @@ void handlePeerRequests() {
 
           std::shared_ptr<Peer> p = std::make_shared<Peer>(*it);
           discoveredPeersMutex.unlock();
+
           connectedPeersMutex.lock();
           connectedPeers.push_back(p);
           connectedPeersMutex.unlock();
@@ -349,7 +350,9 @@ void handlePeerRequests() {
 
           connectedSocketsMutex.unlock();
 
-        } else if (curEvents & EPOLLOUT) {
+        } 
+
+        if (curEvents & EPOLLOUT) {
           connectedSocketsMutex.lock();
           int clientFd = events[i].data.fd;
           auto it = std::find_if(connectedSockets.begin(), connectedSockets.end(), [clientFd](ConnectionSock* sock) {return sock->clientfd == clientFd; });
@@ -388,9 +391,6 @@ void establishConnection(std::string& IPOrHost) {
   std::shared_ptr<Peer> p = std::make_shared<Peer>(*it);
   discoveredPeersMutex.unlock();
 
-  connectedPeersMutex.lock();
-  connectedPeers.push_back(p);
-  connectedPeersMutex.unlock();
 
   ConnectionSock* sock = new ConnectionSock(IPOrHost, std::to_string(p->portNum), epollFd);
   if (!sock->exists()) {
@@ -417,6 +417,10 @@ void establishConnection(std::string& IPOrHost) {
     sock->close();
     return;
   }
+
+  connectedPeersMutex.lock();
+  connectedPeers.push_back(p);
+  connectedPeersMutex.unlock();
   
   connectedSocketsMutex.lock();
   connectedSockets.push_back(sock);
