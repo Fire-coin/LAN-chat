@@ -202,6 +202,12 @@ int closePeerConnection(std::string IP) {
   delete *it2;
   /* Erase the socket from connectedSockets */
   connectedSockets.erase(it2);
+  
+  /* Removing the notifications of closed peer from total notifications */
+  notificationMutex.lock();
+  totalNotifications -= notifications[IP];
+  notificationMutex.unlock();
+
 
   connectedPeersMutex.unlock();
   connectedSocketsMutex.unlock();
@@ -267,22 +273,26 @@ void handlePeerRequests() {
       if (events[i].data.fd == monSock.serverfd) {
         while (1) {
           ConnectionSock* sock = monSock.accept(); 
+
           if (!sock->exists()) {
             // All incoming connections have been processed
             if (errno == EAGAIN || errno == EWOULDBLOCK)
               break;
             else {
               pushError("accept", LCE_ACCEPT);
-              return;
+              continue;
             }
           }
+
           int err = setNonblocking(sock->clientfd);
           if (err < 0) {
-            return;
+            pushError("Could not configure socket file descriptor", -1);
+            continue;
           }
 
           event.events = EPOLLIN | EPOLLET;
           event.data.fd = sock->clientfd;
+
           // Adding new peer for monitoring by epoll
           if (epoll_ctl(epollFd, EPOLL_CTL_ADD, sock->clientfd, &event) == -1) {
             pushError("epoll_ctl: clientFd; handlePeerRequests", LCE_EPOLL_CTL);
@@ -295,18 +305,39 @@ void handlePeerRequests() {
           discoveredPeersMutex.lock();
           auto it = std::find_if(discoveredPeers.begin(), discoveredPeers.end(), [&peerIP](Peer p) {return peerIP == p.IP; });
 
+          if (it == discoveredPeers.end()) {
+            pushError("Connection request from offline socket recieved", -1);
+            discoveredPeersMutex.unlock();
+            continue;
+          }
+
           std::shared_ptr<Peer> p = std::make_shared<Peer>(*it);
           discoveredPeersMutex.unlock();
+          
+          /* If this peer has been connected in the past and there were unread messages from it,
+           * add them back to totalNotifications */
+          notificationMutex.lock();
+          auto notificIt = notifications.find(peerIP);
+          if (notificIt != notifications.end()) {
+            if (notificIt->second != 0) {
+              totalNotifications += notificIt->second;
+            }
+          }
+          notificationMutex.unlock();
+          
 
+          /* Adding peer to connected peers */
           connectedPeersMutex.lock();
           connectedPeers.push_back(p);
           connectedPeersMutex.unlock();
           
+          /* Adding socket to connected sockets */
           connectedSocketsMutex.lock();
           connectedSockets.push_back(sock);
           connectedSocketsMutex.unlock();
         }
-      } else { // There is a read or write available on a socket
+      }
+      else { // There is a read or write available on a socket
         uint32_t curEvents = events[i].events;
         if (curEvents & EPOLLIN) {
           int clientFd = events[i].data.fd;
@@ -417,6 +448,15 @@ void establishConnection(std::string& IPOrHost) {
     sock->close();
     return;
   }
+
+  notificationMutex.lock();
+  auto notificIt = notifications.find(sock->getPeerIP());
+  if (notificIt != notifications.end()) {
+    if (notificIt->second != 0) {
+      totalNotifications += notificIt->second;
+    }
+  }
+  notificationMutex.unlock();
 
   connectedPeersMutex.lock();
   connectedPeers.push_back(p);

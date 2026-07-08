@@ -387,14 +387,16 @@ HOME_OPTIONS displayHomeScreen() {
   auto hso = homeScreenOptions;
   while (1) {
     notificationMutex.lock();
-    if (totalNotifications > 0 && oldNotifications != totalNotifications) {
-      hso = homeScreenOptions;
+    hso = homeScreenOptions;
+    if (totalNotifications > 0) {
       hso[1] += " {";
       hso[1] += std::to_string(totalNotifications);
       hso[1] += '}';
       oldNotifications = totalNotifications;
-      updateAll = true;
+    } else {
+      hso[1] = format(hso[1], hso[1].size() + 10, '<');
     }
+    updateAll = true;
     notificationMutex.unlock();
 
     noecho();
