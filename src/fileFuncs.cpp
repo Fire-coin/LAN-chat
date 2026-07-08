@@ -18,13 +18,6 @@ int savePeerFile(std::string dirName, Msg& msg, bool overwrite) {
   /* Creating a path for the recieved file, and creting it in the directory*/
   fs::path filepath = dirPath / msg.filename;
 
-  //if (!fileExists(filepath)) {
-  //  std::fstream file(filepath, std::fstream::out | std::fstream::binary);
-  //  file.close();
-  //}
-  
-  //pushError(filepath, -1);
-
   std::fstream file;
   if (overwrite)
     file.open(filepath, std::fstream::out | std::fstream::binary);

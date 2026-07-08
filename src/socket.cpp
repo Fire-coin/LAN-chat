@@ -1,21 +1,20 @@
 #include "socket.hpp"
 #include "appErrors.hpp"
-#include <cstring> // memset
+#include "UI.hpp"
 #include <unistd.h> // close
 #include <sys/types.h> 
-#include <netdb.h>
-#include <iostream>
-#include <cstdint>
-#include <vector>
-#include <sstream>
-#include <arpa/inet.h>
-#include <thread>
-#include <chrono>
 #include <sys/epoll.h>
-#include "UI.hpp"
-#include <ifaddrs.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <netdb.h>
+#include <ifaddrs.h>
+#include <arpa/inet.h>
+#include <cstring> // memset
+#include <cstdint>
+#include <vector>
+#include <thread> // std::this_thread
+#include <sstream>
+#include <chrono>
 #include <cassert>
 
 
@@ -252,7 +251,8 @@ int ConnectionSock::connect() {
     return LCE_CONNECT;
   return 0;
 }
-
+/* Sends given amount of bytes from buffer. Returns actual amount of bytes sent or LCE_SEND
+ * if there is error with send sys call*/
 int ConnectionSock::_sendPart(void* buffer, uint64_t length) {
   uint64_t transmitted = 0;
   int64_t n = -1;
@@ -269,7 +269,7 @@ int ConnectionSock::_sendPart(void* buffer, uint64_t length) {
 
   return transmitted;
 }
-
+/* Sends next message from sendMsgBuffer */
 int ConnectionSock::send() {
   msgBufferMutex.lock();
   // Getting next message to be sent from buffer
@@ -367,10 +367,16 @@ int ConnectionSock::_recievePart(void* buffer, uint64_t length) {
   return recieved;
 }
 
-/* Return 0 when Msg is filled with data
- * -1 on error
- *  1 when no error but message not filled with data
- *  2 when file descriptor was closed*/
+/* Returns:
+ * If there is any error from _sendPart, it will be returned
+ * LCE_NOT_FULL_MSG - when non payload part of message has not arrived yet, or when only part of text message came through
+ * LCE_NOT_FULL_PACKAGE - Tells that some part of file has been recieved, but it still not whole
+ * LCE_FULL_PACKAGE - Whole file has already been recieved
+ *
+ * It fills msg.data with parts of file each time it recieves them. 
+ * If message is text message, rawMessade.data holds it until it is complete, then it
+ * is also stored in msg.data.
+ * */
 int ConnectionSock::recieve(Msg& msg) {
   int headerSize = sizeof(int64_t) + sizeof(int16_t);
   if (!this->rawMessageStarted) {
@@ -473,8 +479,6 @@ int ConnectionSock::recieve(Msg& msg) {
   this->rawMessageStarted = true;
 
   return LCE_FULL_PACKAGE;
-
-  return 0;
 }
 
 void ConnectionSock::close() {

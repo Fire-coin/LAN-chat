@@ -2,15 +2,11 @@
 #include "fileFuncs.hpp" // file handling
 #include "UI.hpp" // To set global variables
 #include "appErrors.hpp"
-#include <future> // std::future
-#include <thread> // std::this_thread::sleep_for
-#include <filesystem>
-#include <algorithm> // std::find_if
 #include <sys/epoll.h> // epoll
+#include <sys/eventfd.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <iostream>
-#include <sys/eventfd.h>
+#include <algorithm> // std::find_if
 
 
 std::atomic<int> connectionStatus = 0;
@@ -112,7 +108,6 @@ int recieve(ConnectionSock* socket, Msg& msg) {
   }
   
   if (n == LCE_NOT_FULL_PACKAGE || n == LCE_FULL_PACKAGE) {
-    //TODO fix this case
     if (msg.filename.empty())
       return 0;
     

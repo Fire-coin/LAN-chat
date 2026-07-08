@@ -3,11 +3,10 @@
 #include "formatString.hpp"
 #include "fileSelector.hpp"
 #include "appErrors.hpp"
+#include "socketFuncs.hpp"
 #include <ncurses.h>
 #include <cstring> // memset
 #include <algorithm>
-#include <cassert>
-#include "socketFuncs.hpp"
 
 int ROWS, COLS;
 std::string inputBuffer = "";

@@ -1,16 +1,11 @@
 #include "socket.hpp"
 #include "UI.hpp"
 #include "socketFuncs.hpp"
-#include "fileFuncs.hpp"
 #include "peer.hpp"
-#include "fileSelector.hpp"
 #include <iostream> // std::cout, std::cin
 #include <vector> // std::vector
-#include <future> // std::future
-#include <chrono> // for sleep_for function
 #include <string> // std::string
-#include <mutex> // std::mutex
-#include <utility> // for std::pair
+#include <thread> // std::thread
 
 
 int main() {
@@ -58,7 +53,7 @@ int main() {
         }
         nickMutex.unlock();
         break;
-      case EXIT: // TODO exit still does not work properly for the last closing peer
+      case EXIT:
         handleRequests = false;
         doPeerDiscovery = false;
         showUI = false;
