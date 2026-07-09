@@ -138,11 +138,13 @@ void displayChatLog(WINDOW* win, std::string IP, uint32_t scrollIndex) {
         mvwprintw(win, y + 1, 0, "Message sent: %s\n", it->data.c_str());
       else
         mvwprintw(win, y + 1, 0, "File sent: %s\n", it->data.c_str());
-    } else { /* Message recieved */
+    } else if (it->creator == 1) { /* Message recieved */
       if (!it->isFile)
         mvwprintw(win, y + 1, 0, "Message recieved: %s\n", it->data.c_str());
       else
         mvwprintw(win, y + 1, 0, "File recieved: %s\n", it->data.c_str());
+    } else if (it->creator == 2) { /* System message */
+      mvwprintw(win, y + 1, 0, "%s", format(it->data, COLS, '^').c_str());
     }
   }
   wrefresh(win); // To display it into real terminal
@@ -170,6 +172,7 @@ void displayChatScreen(std::string IP) {
   keypad(inputWin, true);
   halfdelay(1); // Check for request every 100 milliseconds that user does not type
   noecho();
+  set_escdelay(25);
 
   wclear(chatWin);
   wclear(inputWin);
@@ -462,7 +465,6 @@ HOME_OPTIONS displayHomeScreen() {
   werase(win);
   wrefresh(win);
   keypad(win, false);
-  curs_set(1);
 
   /* Returning which option was selected */
   switch (userChoice) {
@@ -592,7 +594,8 @@ std::string displayNewChatScreen() {
  * with arrows or vim motions. It returns true / false depending on option selected. */
 bool displayConfirmWin(std::string question) {
   int ch;
-  int height = 8, width = COLS / 3;
+  int height = 8;
+  int width = COLS / 3;
   int startX, startY;
   bool current = true; // For yes option
   startY = (ROWS - height) / 2;
@@ -606,10 +609,10 @@ bool displayConfirmWin(std::string question) {
   /* Printing the question and wrapping it if needed */
   int offset = 0;
   int i = 0;
-
+  int availableSize = width - 2;
   while (i < ROWS / 2 - 2 && offset < question.size()) {
-    std::string msgRow = question.substr(i * (width - 2), width - 2);
-    mvwprintw(win, i + 1, 1, "%s", format(question, width - 2, '^').c_str());
+    std::string msgRow = question.substr(i * availableSize, availableSize);
+    mvwprintw(win, i + 1, 1, "%s", format(msgRow, availableSize, '^').c_str());
     i++;
     offset += width - 2;
   }

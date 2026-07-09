@@ -59,6 +59,8 @@ int main() {
         showUI = false;
         endRequestHandling();
         break;
+      default:
+        break;
     }
   }
   endUI();

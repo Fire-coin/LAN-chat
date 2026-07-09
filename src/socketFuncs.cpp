@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <algorithm> // std::find_if
+#include <cstring>
 
 
 std::atomic<int> connectionStatus = 0;
@@ -69,6 +70,8 @@ int sendMessage(std::string& IP, std::string& message) {
       return err;
     }
   }
+  if (msg.data.empty() && msg.filename.empty())
+    return 0;
   message.clear(); 
 
 
@@ -260,7 +263,7 @@ void handlePeerRequests() {
     int newEvents = epoll_wait(epollFd, events, maxEvents, -1);
     if (newEvents == -1) {
       pushError("epoll_wait", LCE_EPOLL_WAIT);
-      return;
+      continue;
     }
     
     for (int i = 0; i < newEvents; ++i) {
@@ -357,6 +360,9 @@ void handlePeerRequests() {
 
           // Other peer closed file descriptor
           if (err == LCE_FD_CLOSED) { 
+            msg.filename.clear();
+            msg.data = "Peer disconnected";
+            addMsg((*it)->getPeerIP(), msg, 2);
             connectedSocketsMutex.unlock();
             closePeerConnection((*it)->getPeerIP());
             continue;
@@ -425,7 +431,7 @@ void establishConnection(std::string& IPOrHost) {
   }
   int err = sock->connect();
   if (err < 0) {
-    pushError("Could not connect; establishConnection", err);
+    pushError("Could not connect; establishConnection" + std::string(strerror(errno)), err);
     return;
   }
   
