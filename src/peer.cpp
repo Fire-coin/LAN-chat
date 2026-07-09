@@ -102,6 +102,7 @@ void discoverPeers(uint16_t portNum, uint16_t discoveryPortNum) {
       } else {
         it->lastSeen = std::chrono::steady_clock::now();
         it->nickname = nickname;
+        it->portNum = peerPortNum;
       }
      
 

@@ -230,6 +230,7 @@ int ConnectionSock::connect() {
   hints.ai_protocol = 0;
   s =  getaddrinfo(IPOrHost.c_str(), port.c_str(), &hints, &result);
   if (s != 0) {
+    pushError(port + " " + IPOrHost, -1);
     return LCE_CONNECT;
   }
 
@@ -247,8 +248,10 @@ int ConnectionSock::connect() {
   
   freeaddrinfo(result);
 
-  if (rp == NULL)
+  if (rp == NULL) {
+    pushError(port + " " + IPOrHost, -1);
     return LCE_CONNECT;
+  }
   return 0;
 }
 /* Sends given amount of bytes from buffer. Returns actual amount of bytes sent or LCE_SEND

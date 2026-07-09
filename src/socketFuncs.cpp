@@ -228,9 +228,13 @@ void handlePeerRequests() {
   /* trying to bind monitoring socket to an adress, if it fails try next one
    * this is repeated up to 10 times (theoretically 10 apps can run on the same machine)*/
   do {
-    err = monSock.bind(appPortNum + i);
+    err = monSock.bind(appPortNum);
     i++;
+    appPortNum++;
   } while (err < 0 && i < 10);
+  /* port number is decremented because it is always incremented at the end of the loop,
+   * so to get one in use, we shall decrement it. */
+  appPortNum--;
 
   if (err < 0) {
       connectionStatus = -1;
