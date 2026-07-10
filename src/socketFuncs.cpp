@@ -29,15 +29,18 @@ int endRequestHandling() {
   write(efd, &u, sizeof(u));
   return 0;
 }
-
+/* Puts contents of file from filepath, into msg.data, 
+ * and its filename into msg.filename */
 int processFile(std::string& filepath, Msg& msg) {
   int error = 0;
   std::string filename;
   std::fstream file;
 
-  error = handleFile(filepath, file); // Opening the file and handling errors
+  // Opening the file and handling errors
+  error = handleFile(filepath, file); 
   if (error < 0)
     return error; // Error with file
+  
   filename = getFilename(filepath);
   msg.filename = filename;
 
@@ -48,14 +51,23 @@ int processFile(std::string& filepath, Msg& msg) {
   
   // Get length of filename
   int16_t filenameLength = filename.size();
+
   // Reserve space for file data
-  msg.data.resize(fileLength);
-  file.read(msg.data.data(), fileLength);
+  try {
+    msg.data.resize(fileLength);
+    file.read(msg.data.data(), fileLength);
+  } catch (std::bad_alloc& e) {
+    /* Provided file was too big, and memory could not handle it */
+    return LCE_FILE_TOO_BIG;
+  }
 
   file.close();
 
   return 0;
 }
+/* Processes message from given string into Msg structure.
+ * Then using ConnectionSock::sendMsg it sends it to other peer
+ * which is specified by given IP.*/
 int sendMessage(std::string& IP, std::string& message) {
   Msg msg{};
   int index = message.find("$file={");
@@ -64,16 +76,18 @@ int sendMessage(std::string& IP, std::string& message) {
   } else { // File
     int endOfPathIndex = message.find("}");
     std::string filepath = std::string(message.begin() + index + 7, message.begin() + endOfPathIndex); // We add + 7 bytes to start from the filepath
+
     int err = processFile(filepath, msg);
     if (err < 0) {
       message.clear();
       return err;
     }
   }
+  /* Not allow to send completely empty messages */
   if (msg.data.empty() && msg.filename.empty())
     return 0;
-  message.clear(); 
 
+  message.clear(); 
 
   // Find peer with this IP
   connectedSocketsMutex.lock();
@@ -99,21 +113,26 @@ int sendMessage(std::string& IP, std::string& message) {
   addMsg(IP, msg, 0);
   return 0;
 }
+/* Filename of last file which was modified (arrived in multiple packets) */
 std::string modifiedFile = "";
 
+/* Performs a recieve call from ConnectionSock. It determines
+ * whether user sent a file or a message. If file is sent, 
+ * it writes the chunks of file until it is complete using savePeerFile(). */
 int recieve(ConnectionSock* socket, Msg& msg) {
   int n;
+  /* Calling ConnectionSock::recieve */
   try {
     n = socket->recieve(msg);
   } catch (const std::exception& e) {
-
     pushError(e.what(), -1);
   }
   
+  /* ..._PACKAGE indicates that a file has been sent most of the time */
   if (n == LCE_NOT_FULL_PACKAGE || n == LCE_FULL_PACKAGE) {
     if (msg.filename.empty())
       return 0;
-    
+    /* If this file is written into for first time, open it in out mode */
     if (modifiedFile != msg.filename) {
       int err = savePeerFile(".LAN-chat_files", msg, true);
 
@@ -122,7 +141,7 @@ int recieve(ConnectionSock* socket, Msg& msg) {
         return LCE_ALREADY_REPORTED;
       }
       modifiedFile = msg.filename;
-    } else {
+    } else { /* If this file has already been written to, then open file with app mode */
       int err = savePeerFile(".LAN-chat_files", msg, false);
 
       if (err == LCE_FILE_OP) {
@@ -130,10 +149,12 @@ int recieve(ConnectionSock* socket, Msg& msg) {
         return LCE_ALREADY_REPORTED;
       }
     }
+    /* If the whole file has been transfered */
     if (n == LCE_FULL_PACKAGE) {
       modifiedFile.clear();
       return 0;
     }
+    /* Message is not complete and shall not be added to history yet */
     return LCE_NOT_FULL_MSG;
   }
 
@@ -147,6 +168,7 @@ int recieve(ConnectionSock* socket, Msg& msg) {
 std::vector<ConnectionSock*> connectedSockets{};
 std::mutex connectedSocketsMutex;
 // from https://medium.com/@hajorda/non-blocking-sockets-and-i-o-multiplexing-with-epoll-in-c-bd3d8e54c20a
+/* Sets file descriptor of socket to non-blocking while preserving all other flags */
 int setNonblocking(int sockfd) {
     int flags = fcntl(sockfd, F_GETFL, 0);
     if (flags == -1) {
@@ -159,13 +181,18 @@ int setNonblocking(int sockfd) {
     }
     return 0;
 }
+/* Wrapper around handlePeerRequests, which ensures 
+ * that all other threads end as soon as this function terminates. */
 void handlePeerRequestsWrapper() {
   handlePeerRequests();
   handleRequests = false;
   doPeerDiscovery = false;
   showUI = false;
 }
-
+/* Closes connection with peer of specified IP.
+ * It deletes Peer from currentPeers and socket from
+ * connectedSockets. 
+ * Chat history is preserved*/
 int closePeerConnection(std::string IP) {
   connectedPeersMutex.lock();
   connectedSocketsMutex.lock();
@@ -250,7 +277,7 @@ void handlePeerRequests() {
 
   monSock.listen();
 
-  
+  /* Adding server socket file descriptor to epoll list */ 
   struct epoll_event event;
   event.events = EPOLLIN;
   event.data.fd = monSock.serverfd;
@@ -341,6 +368,8 @@ void handlePeerRequests() {
       }
       else { // There is a read or write available on a socket
         uint32_t curEvents = events[i].events;
+
+        /* A read available -> message came */
         if (curEvents & EPOLLIN) {
           int clientFd = events[i].data.fd;
           connectedSocketsMutex.lock();
@@ -352,6 +381,7 @@ void handlePeerRequests() {
           }
           Msg msg;
           int err;
+          /* Recieving messages until whole socket buffer is empty */
           do {
             err = recieve(*it, msg);
           }
@@ -388,6 +418,7 @@ void handlePeerRequests() {
 
         } 
 
+        /* There is a write available -> send message from send buffer */
         if (curEvents & EPOLLOUT) {
           connectedSocketsMutex.lock();
           int clientFd = events[i].data.fd;
@@ -414,6 +445,10 @@ void handlePeerRequests() {
   }
   close(epollFd);
 }
+
+/* Establishes connection with peer from IPOrHost address.
+ * Adds Peer to connectedPeers and new ConnectionSock to 
+ * connectedSockets*/
 void establishConnection(std::string& IPOrHost) {
   // finding the peer to which user wants to connect in available peers
   discoveredPeersMutex.lock();

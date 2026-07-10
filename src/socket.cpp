@@ -36,7 +36,7 @@ UDPDiscoverySock::UDPDiscoverySock(std::string nickname) {
   memset(&this->broadcastAddr, 0, sizeof(this->broadcastAddr));
   this->changeNickname(nickname);
 }
-
+/* Gets private broadcast address using ifaddrs */
 std::string UDPDiscoverySock::getBroadcastAddr() {
   struct ifaddrs *ifaddr;
   struct sockaddr_in* broadcastAddr;
@@ -45,29 +45,33 @@ std::string UDPDiscoverySock::getBroadcastAddr() {
   if (getifaddrs(&ifaddr) != 0) {
     pushError("getifaddrs failed; UDPDiscoverySock::getBroadcastAddr", LCE_SYS_CALL);
   }
-
+  /* Going through the linked list of addresses of current device. */
   for (struct ifaddrs *ifa = ifaddr; ifa; ifa = ifa->ifa_next) {
+    /* Check for IPv4 only */
     if (ifa->ifa_addr->sa_family == AF_INET) {
       struct sockaddr_in* addr = (struct sockaddr_in*) ifa->ifa_addr;
-      /* Checks if address is loopback (ussually 127.0.0.1) */
+      /* Checks and continues if address is loopback (ussually 127.0.0.1) */
       if (ifa->ifa_flags & IFF_LOOPBACK)
         continue;
 
       /* If current IP has broadcast address, return it */
       if (ifa->ifa_flags & IFF_BROADCAST) {
         broadcastAddr = (struct sockaddr_in* ) ifa->ifa_broadaddr;
+        freeifaddrs(ifaddr);
         return inet_ntoa(broadcastAddr->sin_addr);
       }
     }
   }
+  freeifaddrs(ifaddr);
   /* No IP has broadcast address, most probably the device is not connected to network */
   return "";
 }
-
+/* Binds the socket to calculated broadcast address */
 // inspired by https://github.com/Johannes4Linux/linux_socket_examples/blob/main/udp_client.c
 int UDPDiscoverySock::bind(uint16_t portNum, uint16_t appPortNum) {
   this->portNum = portNum;
   this->appPortNum = appPortNum;
+
   this->broadcastAddr.sin_family = AF_INET; // IPv4
   this->broadcastAddr.sin_port = htons(portNum); 
   
@@ -88,11 +92,10 @@ int UDPDiscoverySock::bind(uint16_t portNum, uint16_t appPortNum) {
   return 0;
 }
 
-
+/* Sends a packet to the address to which it was binded to.
+ * The packet is in the form LAN-chat|<nickname>|<portNum> */
 int UDPDiscoverySock::sendPresence(int delay) {
   std::string message;
-  // Message will be in form LAN-chat|<nickname>|<portNum>
-  // where <nickname> means value of nickname
   message.append("LAN-chat|");
   message.append((this->nickname == "") ? "unknown" : this->nickname);
   message.append("|");
@@ -107,6 +110,8 @@ int UDPDiscoverySock::sendPresence(int delay) {
   return n;
 }
 
+/* Recieves packet from address (private broadcast one) and it sets the
+ * parameters IP and nickname from recieved IP and nickname respectively */
 int UDPDiscoverySock::recievePacket(std::string& senderIP, std::string& nickname, uint16_t& peerPortNum, int delay) {
   std::vector<char> buffer(MAX_UDP_PACKET_SIZE);
   socklen_t senderLen = sizeof(this->senderAddr);
@@ -216,7 +221,8 @@ ConnectionSock::ConnectionSock(std::string& IPOrHost, std::string port, int epol
   this->isEpollout = false;
   this->epollFd = epollFd;
 }
-
+/* Connects to the peer with IP and port specified in initialization.
+ * This is done using getaddrinfo */
 int ConnectionSock::connect() {
   struct addrinfo  hints;
   struct addrinfo  *result, *rp;
@@ -423,17 +429,8 @@ int ConnectionSock::recieve(Msg& msg) {
   }
   
   uint64_t dataRecieved = (offset - headerSize - header.filenameSize);
-  std::string recievedData;
-  
-
-  if (recievedData.size() < header.dataSize - dataRecieved) {
-    if (header.dataSize - dataRecieved < MAX_PACKAGE_CHUNK) {
-      recievedData.resize(header.dataSize - dataRecieved);
-    } else {
-      recievedData.resize(MAX_PACKAGE_CHUNK);
-    }
-  }
-
+  /* Creating buffer for data recieved, we recieve at once at most MAX_PACKAGE_CHUNK bytes */
+  std::string recievedData(MAX_PACKAGE_CHUNK, '\0');
 
   n = this->_recievePart(recievedData.data(), recievedData.size());
 
@@ -448,21 +445,27 @@ int ConnectionSock::recieve(Msg& msg) {
 
   msg.filename.clear();
   msg.data.clear();
-
+  
+  /* Resizing message to the size of recieved bytes */
   recievedData.resize(n);
 
   msg.filename = this->rawMessage.filename;
+  /* If it is a file, then put this chunk into msg.data. 
+   * If it is message, append it to rawMessage.data */
   if (!this->rawMessage.filename.empty())
     msg.data = recievedData;
   else
     this->rawMessage.data += recievedData;
-
+  /* If offset starting from where data starts is still less than dataSize */
   if (offset - (uint64_t)headerSize - (uint64_t)header.filenameSize < header.dataSize) {
     if (this->rawMessage.filename.empty()) {
       return LCE_NOT_FULL_MSG;
     }
     return LCE_NOT_FULL_PACKAGE;
   }
+  /* Function gets here, when all the data has been recieved */
+  
+  /* Put the stored message into msg.data */
   if (this->rawMessage.filename.empty()) {
     msg.data = this->rawMessage.data;
   }
@@ -473,7 +476,7 @@ int ConnectionSock::recieve(Msg& msg) {
   n = this->_recievePart(&header, 1);
   assert(n <= 0);
   this->rawMessageStarted = false;
-
+  /* This is here for safety clearing all the fields */
   memset(&this->rawMessage.header, 0, headerSize);
   this->rawMessage.data.clear();
   this->rawMessage.filename.clear();

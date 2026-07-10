@@ -25,6 +25,7 @@ constexpr int LCE_EPOLL_CREATE = -17;
 constexpr int LCE_SYS_CALL= -18;
 constexpr int LCE_NOT_FULL_PACKAGE = -19;
 constexpr int LCE_FULL_PACKAGE = -20;
+constexpr int LCE_FILE_TOO_BIG = -21;
 
 struct LCError {
   std::string message;

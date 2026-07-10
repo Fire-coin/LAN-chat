@@ -242,12 +242,19 @@ void displayChatScreen(std::string IP) {
     
     // Enter has been pressed
     if (ch == 10) {
-      sendMessage(IP, inputBuffer);
+      int err = sendMessage(IP, inputBuffer);
+
       /* This way clearing the line is good, because if somehow error happens, the dividing
        * line will still be drawn*/
       werase(inputWin);
       mvwprintw(inputWin, 0, 0, "%s", separator);
       wrefresh(inputWin);
+
+      if (err == LCE_FILE_TOO_BIG) {
+        pushError("Selected file is too big", -1);
+        continue;
+      }
+
       /* When message is sent, then scroll to the end of conversation */
       chatHistoryMutex.lock();
       if (chatHistory[IP].size() > (ROWS - 6) / 2 && scrollIndex < chatHistory[IP].size() - 1 - (ROWS - 6) / 2) {
