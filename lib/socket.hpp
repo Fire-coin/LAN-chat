@@ -18,7 +18,6 @@ struct Msg {
 };
 
 class UDPDiscoverySock {
-  int sockFd;
   uint16_t portNum;
   uint16_t appPortNum;
   std::string nickname;
@@ -26,6 +25,7 @@ class UDPDiscoverySock {
 
 
   public:
+  int sockFd;
   UDPDiscoverySock(std::string nickname);
   UDPDiscoverySock();
   

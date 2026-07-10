@@ -36,6 +36,7 @@ int savePeerFile(std::string dirName, Msg& msg, bool overwrite) {
 bool fileExists(const std::string& filePath) {
   return fs::exists(filePath);
 }
+
 /* Handles opening file and error management */
 int handleFile(const std::string& path, std::fstream& file) {
   if (!fileExists(path)) { 
@@ -77,6 +78,9 @@ std::string getParentDir(std::string curPath) {
   return p.parent_path().string();
 }
 
+/* Populates given vector with contents of specified directory p.
+ * It returns it in format to be straight used by file selector.
+ * This means that it will put / at the end of any directory. */
 void getDirContents(std::vector<std::string>& files, std::string p) {
   files.clear();
   files.push_back("..");

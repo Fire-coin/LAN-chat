@@ -116,6 +116,9 @@ int UDPDiscoverySock::recievePacket(std::string& senderIP, std::string& nickname
   std::vector<char> buffer(MAX_UDP_PACKET_SIZE);
   socklen_t senderLen = sizeof(this->senderAddr);
   int n = recvfrom(this->sockFd, buffer.data(), MAX_UDP_PACKET_SIZE, 0, (struct sockaddr*) &this->senderAddr, &senderLen);
+  if (n < 0) {
+    return n;
+  }
 
   std::string msg(buffer.data(), n);
   std::stringstream ss(msg);

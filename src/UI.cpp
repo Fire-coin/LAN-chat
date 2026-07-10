@@ -817,7 +817,7 @@ std::string displayChatsScreen(std::vector<std::shared_ptr<Peer>>& connectedPeer
   win = newwin(ROWS, COLS, 0, 0);
   /* Displaying the header of sreen */
   wprintw(win, "Select a chat to enter or delete with backspace\n");
-  wprintw(win, "nickname   | IP\n");
+  wprintw(win, "    %s| nickname\n", format("IP", 3 * 4 + 3, '^').c_str());
   wrefresh(win);
   selectorWin = newwin(rows, cols, 2, 0);
 
@@ -833,10 +833,17 @@ std::string displayChatsScreen(std::vector<std::shared_ptr<Peer>>& connectedPeer
     connectedPeersMutex.lock();
     /* Calculating if there were any changes of options */
     for (int i = 0; i < connectedPeers.size(); ++i) {
+      discoveredPeersMutex.lock();
+      auto it = std::find_if(discoveredPeers.begin(), discoveredPeers.end(), [connectedPeers, i](Peer p) { return p.IP == connectedPeers[i]->IP; });
+      if (it == discoveredPeers.end()) {
+        discoveredPeersMutex.unlock();
+        continue;
+      }
+
       entry.clear();
-      entry += format(connectedPeers[i]->IP, 3 * 4 + 3, '<');
+      entry += format(it->IP, 3 * 4 + 3, '<');
       entry += '|';
-      entry += connectedPeers[i]->nickname;
+      entry += it->nickname;
       notificationMutex.lock();
       /* Showing the notification count */
       if (notifications[connectedPeers[i]->IP] > 0) {
@@ -845,8 +852,9 @@ std::string displayChatsScreen(std::vector<std::shared_ptr<Peer>>& connectedPeer
         entry += "}";
       }
       notificationMutex.unlock();
-      mvwprintw(selectorWin, i, 0, "[ ] %s", entry.c_str());
+      mvwprintw(selectorWin, i, 0, "[ ] %s", format(entry, COLS - 5, '<').c_str());
       options.push_back(*connectedPeers[i]);
+      discoveredPeersMutex.unlock();
     }
     connectedPeersMutex.unlock();
 

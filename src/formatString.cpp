@@ -1,5 +1,8 @@
 #include "formatString.hpp"
-
+/* Adds a padding to given input string, so in total
+ * its size if outSize. position tells, where to place the
+ * string itself, < means to the left, > means to the right
+ * and ^ means centered. */
 std::string format(std::string& input, int outSize, char position) {
   std::string out;
   int length = input.size();

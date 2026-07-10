@@ -2,7 +2,6 @@
 #include "UI.hpp"
 #include "socketFuncs.hpp"
 #include "peer.hpp"
-#include <iostream> // std::cout, std::cin
 #include <vector> // std::vector
 #include <string> // std::string
 #include <thread> // std::thread
@@ -11,22 +10,30 @@
 int main() {
   
   int choice;
-  //int portNum = 55555;
   int discoveryPortNum = 5000;
+  std::string selectedIP;
+  std::string nick;
+  HOME_OPTIONS selectedOption = NO_OPTION;
   
+  /* Trying to start up handling peer requests. If it succeeds, then
+   * connection status is set to 1. At the same time it changes 
+   * discoveryPortNum, such that it is same one as monitoring socket is
+   * listening on. */
   std::thread peerRequestsThread(handlePeerRequestsWrapper);
   while (connectionStatus == 0) {}
   if (connectionStatus == -1) {
     return -1;
   }
+  
+  /* Starting peer discovery, sending and recieving packets. */
   std::thread discoveryThread(discoverPeers, appPortNum.load(), discoveryPortNum);
-
-  std::string selectedIP;
-  std::string nick;
-  HOME_OPTIONS selectedOption = NO_OPTION;
+  
+  /* Strting up UI with ncurses */
   beginUI();
+  /* Main app loop */
   while (showUI) {
     selectedOption = displayHomeScreen();
+
     switch (selectedOption) {
       case NEW_CHAT:
         selectedIP = displayNewChatScreen();
@@ -65,8 +72,8 @@ int main() {
   }
   endUI();
 
-  discoveryThread.join();
   peerRequestsThread.join();
+  discoveryThread.join();
   
   return 0;
 }

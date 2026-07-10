@@ -25,6 +25,7 @@ std::atomic<bool> doPeerDiscovery = true;
 // TODO make the sockets to broadcast on all broadcast addresses that are connected to the device, e.g wlan and eth. Because they can have different subnet masks XXX this is optional for version 1
 void discoverPeers(uint16_t portNum, uint16_t discoveryPortNum) {
   UDPDiscoverySock uSock = UDPDiscoverySock();
+  setNonblocking(uSock.sockFd);
 
   if (uSock.bind(discoveryPortNum, portNum) < 0) {
     pushError("Discovery socket binding failure", LCE_BIND);
@@ -36,8 +37,8 @@ void discoverPeers(uint16_t portNum, uint16_t discoveryPortNum) {
   bool isRecievingPacket = false;
   std::future<int> packetSendError, packetRecvError;
 
-  int sendDelay = 1000; // In milliseconds
-  int recvDelay = 500; // In milliseconds
+  const int sendDelay = 1000; // In milliseconds
+  const int recvDelay = 500; // In milliseconds
 
   std::string nickname, IP; 
   uint16_t peerPortNum;
@@ -49,17 +50,18 @@ void discoverPeers(uint16_t portNum, uint16_t discoveryPortNum) {
       nickMutex.unlock();
       changeNickname = false;
     }
-
+    
+    /* If there is no sending task running, begin one */
     if (!isSendingPacket) {
       isSendingPacket = true;
       packetSendError = std::async(std::launch::async, [sendDelay, &uSock]() { return uSock.sendPresence(sendDelay); });
     }
-    
+    /* Check if sending task finished running */
     auto sendStatus = packetSendError.wait_for(std::chrono::milliseconds(0));
     if (sendStatus == std::future_status::ready) {
       isSendingPacket = false;
       int SendError = packetSendError.get();
-      if (SendError < 0) {
+      if (SendError < 0 && errno != EWOULDBLOCK) {
         pushError("Error while sending over UDP socket", LCE_SEND);
         continue;
       }
@@ -81,6 +83,8 @@ void discoverPeers(uint16_t portNum, uint16_t discoveryPortNum) {
       if (recvError == LCE_BAD_PACKET) {
         continue;
       }
+      if (recvError < 0 && errno == EWOULDBLOCK)
+        continue;
 
       isRecievingPacket = false;
       discoveredPeersMutex.lock();
@@ -122,7 +126,7 @@ void discoverPeers(uint16_t portNum, uint16_t discoveryPortNum) {
   }
 }
 
-
+/* Gets all IP addresses of current machine with ifaddrs */
 std::vector<std::string> getMachineIPs() {
   std::vector<std::string> IPs;
   struct ifaddrs *ifaddr;
