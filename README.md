@@ -7,7 +7,7 @@ A simple P2P CLI tool that enables chatting and file sending across LAN network 
 
 
 ### Network Scanning
-<img width="486" height="201" alt="Screenshot from 2026-07-10 11-31-48" src="https://github.com/user-attachments/assets/764cd5b2-acb8-414b-ac32-41a788e40b4b" />
+<img width="397" height="101" alt="Screenshot from 2026-07-10 13-52-18" src="https://github.com/user-attachments/assets/2755a446-c6c4-406b-bc3a-7b75d8b21074" />
 
 
 Automatical discovery of other peers on the same local network.
@@ -28,8 +28,7 @@ Limitation is that either file, or message can be sent at a time. Not both.
 ### Select chat to talk to
 When selecting option Chats in home screen, following window with all connected chats will pop up:
 
-<img width="446" height="76" alt="Screenshot from 2026-07-10 11-47-04" src="https://github.com/user-attachments/assets/41f6fbea-b73e-4f97-807c-d98e160d1ad9" />
-
+<img width="444" height="110" alt="Screenshot from 2026-07-10 13-49-11" src="https://github.com/user-attachments/assets/1654b1da-0489-4085-9398-6072e4d55ce0" />
 
 ### Set custom nickname
 One is be able to set custom nickname so it is easier to recognise devices on network.
@@ -75,17 +74,21 @@ A minimal TUI interface made with ncurses. Which should be able to run on almost
 # How do I get this masterpiece running on my machine?
 ## Prerequirements
 * Linux environment, or anything which will support ncurses and POSIX socket API.
+* Git
 * Ncurses
-* C++ 17 or higher my personal choice is g++ from gcc.
+* compiler for C++ 17 or higher (my personal choice is g++ from gcc.)
 * Cmake
 * Have the guts to build something from source.
 ## Downloading prerequirements, code snippets are for Arch Linux, but use package manager of your distro
 
 ````bash
+# Getting git
+sudo pacman -S git
+
 # Getting nccurses (if cmake complains)
 sudo pacman -S ncurses
 
-# Getting g++ with gcc package
+# Getting g++ with gcc package (can be any c++ compiler supporting C++17+)
 sudo pacman -S gcc
 
 # Getting cmake
@@ -111,6 +114,11 @@ cmake --build build
 ````
 
 If there are any errors thrown by cmake, it means that you most probably did not install something from the prerequirements. Either way consult with cmake manual: https://cmake.org/
+
+# Where this app has been tested?
+* Arch Linux
+* Termux on Android (use clang because g++ is harder to get there)
+* Linux Mint
 
 # Resources
 ## Sockets on linux
