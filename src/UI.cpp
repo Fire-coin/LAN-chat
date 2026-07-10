@@ -510,6 +510,8 @@ std::string displayNewChatScreen() {
   wrefresh(win);
 
   keypad(win, true);
+  keypad(optionWin, true);
+  set_escdelay(25);
   curs_set(0); // Sets cursor to be invisible
   halfdelay(1);
 
@@ -824,8 +826,10 @@ std::string displayChatsScreen(std::vector<std::shared_ptr<Peer>>& connectedPeer
   
   noecho();
   halfdelay(10); // Check for update every second
-
+  set_escdelay(25);
+  
   keypad(win, true);
+  keypad(selectorWin, true);
   curs_set(0); // Sets cursor to be invisible
   while (1) {
     options.clear();
