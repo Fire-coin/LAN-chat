@@ -129,3 +129,19 @@ Basics of working with sockets, primararly streaming TCP sockets and datagram UD
 Turns out there are private broadcast addresses, and different routers can have different structures of them.
 ## Working with man pages
 I read through a quite a lot of man pages when searching how to work with sockets. They quite informative, but only when you already understand the terminology.
+
+## Improving my C++ skills
+By the end of the project I was a lot more likely to know where the error could be comming from if it appered, than when I started this project. In addition I also learned what other common errors mean and how to fix them.
+
+I also implemented few quite nice techniques to solve several problems, such as first time using queue outside of competitional programming, to store messages which should be sent.
+
+And for the first time I actually needed several source code files to not drown in all the different functions. So that was also quite new experience for me.
+
+## Most wise advices which I should have used ALWAYS
+### Always go from the bottom most functions.
+### If something does not work for 30 minutes, completely rewrite the function.
+
+I got this wisdom after spending around 14 debugging 2 errors, both of which were on the same line, in one of the most primitive functions.
+
+## Learning about ncurses and using them
+I used ncurses not in their full potential, but I believe it is good enough. The app runs quite smoothly.
